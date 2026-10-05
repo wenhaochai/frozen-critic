@@ -48,7 +48,8 @@ ArticleCharts.define(function (C, t) {
   var AUCS = [
     { k: 'auc_last', ci: 'auc_last_ci', label: { en: 'Value before the last token', zh: '最后一个 token 之前的值' }, color: BLUE },
     { k: 'auc_mean', ci: 'auc_mean_ci', label: { en: 'Mean value over the response', zh: '整份回答的平均值' }, color: YEL },
-    { k: 'within_auc_last', label: { en: 'Value before the last token, within each problem', zh: '最后一个 token 之前的值，只在题内比较' }, color: GRN }
+    { k: 'within_auc_last', ci: 'within_auc_last_ci', label: { en: 'Value before the last token, within each problem', zh: '最后一个 token 之前的值，只在题内比较' }, color: GRN },
+    { k: 'within_auc_neg_len', ci: 'within_auc_neg_len_ci', label: { en: 'Shorter response, within each problem (no critic)', zh: '回答更短，只在题内比较（不用 critic）' }, color: REF }
   ];
   C.custom('c-auc', AUCS.map(function (s) { return { label: s.label, color: s.color, dot: true }; }), function (body, h) {
     var el = h.el, W = 640, rowH = 46, mL = 176, mR = 18, mT = 26, n = Math.max(GENS.length, 4), H = mT + n * rowH + 44;
@@ -64,7 +65,7 @@ ArticleCharts.define(function (C, t) {
       if (!R || !R[g.key]) return;
       AUCS.forEach(function (a, j) {
         var v = R[g.key][a.k]; if (v == null) return;
-        var y = cy + (j - 1) * 10;
+        var y = cy + (j - 1.5) * 9;
         var ci = a.ci ? R[g.key][a.ci] : null;
         if (ci) el('line', { x1: s.X(ci[0]), y1: y, x2: s.X(ci[1]), y2: y, stroke: a.color, 'stroke-width': 2, 'stroke-opacity': 0.5 }, svg);
         var c = el('circle', { cx: s.X(v), cy: y, r: 5, fill: a.color, stroke: 'var(--paper)', 'stroke-width': 1.5 }, svg);

@@ -37,8 +37,9 @@ def main():
 
     llm = LLM(model=args.model, tokenizer=args.tokenizer or args.model, dtype="bfloat16", seed=args.seed,
               gpu_memory_utilization=0.85, max_model_len=args.max_tokens + 512, enable_prefix_caching=True)
-    sp = SamplingParams(n=args.n_samples, temperature=args.temperature, top_p=1.0, max_tokens=args.max_tokens,
-                        seed=args.seed)
+    # No per-request seed: vLLM derives each request's Gumbel noise from (seed, position, token), so one seed shared
+    # by all prompts would give sample k of every prompt the same noise. LLM(seed=...) still makes runs repeatable.
+    sp = SamplingParams(n=args.n_samples, temperature=args.temperature, top_p=1.0, max_tokens=args.max_tokens)
     t0 = time.time()
     outs = llm.generate(prompts, sp)
     gen_s = time.time() - t0

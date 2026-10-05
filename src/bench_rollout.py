@@ -33,6 +33,7 @@ for size in args.sizes.split(","):
     out[size] = {"seconds": dt, "tokens": ntok, "tok_per_s": ntok / dt, "n_seqs": len(prompts) * args.n_samples,
                  "max_tokens": args.max_tokens}
     print(size, json.dumps(out[size]), flush=True)
+    (RESULTS / "bench_rollout.json").write_text(json.dumps(out, indent=1))
     del llm
     import gc, torch
     gc.collect()

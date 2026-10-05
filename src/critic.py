@@ -67,6 +67,8 @@ def load(device="cuda", backend="flash_attention_2"):
 def forward_packed(model, seqs):
     """Post-token values for each full sequence in `seqs` (lists of ids), from one packed forward."""
     lengths = [len(s) for s in seqs]
+    if BACKEND == "eager" and max(lengths) > 4096:
+        raise ValueError("the eager backend scores at most 4,096 tokens per sequence")
     flat = [t for s in seqs for t in s]
     if min(flat) < 0 or max(flat) >= CRITIC_VOCAB:
         raise ValueError("critic ids must lie in [0, 151667)")

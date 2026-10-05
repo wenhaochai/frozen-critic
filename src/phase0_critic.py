@@ -17,7 +17,7 @@ import numpy as np
 import torch
 
 import critic
-from common import CRITIC_DIR, CRITIC_EOS, QWEN25_VOCAB, RESULTS, load_gsm8k, user_prompt
+from common import CRITIC_DIR, CRITIC_EOS, QWEN25_VOCAB, RESULTS, grade, load_gsm8k, user_prompt
 from value_model import tokenize_pair
 
 import os
@@ -30,6 +30,8 @@ N_BINS = 20
 
 
 def save(name, obj):
+    if isinstance(obj, dict):
+        obj["_backend"] = critic.BACKEND
     path = RESULTS / f"{name}{'_smoke' if SMOKE else ''}.json"
     path.write_text(json.dumps(obj, indent=1, default=float))
     print(f"wrote {path}")
@@ -47,6 +49,8 @@ def prompt_ids(question):
 def load_gen(name):
     path = RAW / f"gen_{name}.jsonl"
     recs = [json.loads(l) for l in open(path)] if path.exists() else []
+    for r in recs:
+        r["correct"] = grade(r["text"], r["gold"])
     return recs[:SMOKE] if SMOKE else recs
 
 
@@ -112,6 +116,22 @@ def bootstrap_auc(recs, key, reps=1000, seed=0):
     return [float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))] if vals else None
 
 
+def bootstrap_within(recs, key, reps=1000, seed=0):
+    rng = np.random.default_rng(seed)
+    by = {}
+    for r in recs:
+        by.setdefault(r["idx"], []).append(r)
+    keys = list(by)
+    vals = []
+    for _ in range(reps):
+        pick = rng.choice(len(keys), len(keys), replace=True)
+        rs = [dict(r, idx=j) for j, k in enumerate(pick) for r in by[keys[k]]]
+        a, n = within_problem_auc(rs, key)
+        if a is not None:
+            vals.append(a)
+    return [float(np.percentile(vals, 2.5)), float(np.percentile(vals, 97.5))] if vals else None
+
+
 def binned(curve, n_bins=N_BINS):
     """Mean value in n_bins equal fractions of the response."""
     edges = np.linspace(0, len(curve), n_bins + 1).round().astype(int)
@@ -145,7 +165,8 @@ def score_records(model, recs, variant="raw", rows=None, max_tokens=65536):
     for i, r in enumerate(recs):
         pre = scores[i]["pre"]
         t_drop, drop = steepest_drop(pre)
-        out.append({"gen": r["gen"], "idx": r["idx"], "correct": r["correct"], "finished": r["finished"],
+        out.append({"gen": r["gen"], "idx": r["idx"], "sample": r.get("sample"), "correct": r["correct"],
+                    "finished": r["finished"], "neg_len": -len(pre),
                     "n": len(pre), "prompt_value": float(pre[0]), "last": float(pre[-1]),
                     "mean": float(pre.mean()), "min": float(pre.min()), "max": float(pre.max()),
                     "raw_final": scores[i]["raw_last"], "bins": binned(pre),
@@ -159,10 +180,12 @@ def summarize(recs):
     s = {"n": len(recs), "n_correct": len(c), "accuracy": len(c) / max(len(recs), 1),
          "finished_frac": float(np.mean([r["finished"] for r in recs])) if recs else None,
          "mean_len": float(np.mean([r["n"] for r in recs])) if recs else None}
-    for key in ("last", "mean", "raw_final", "min"):
+    for key in ("last", "mean", "raw_final", "min", "prompt_value", "neg_len"):
         s[f"auc_{key}"] = auc([r[key] for r in c], [r[key] for r in w])
         s[f"auc_{key}_ci"] = bootstrap_auc(recs, key) if c and w else None
         s[f"within_auc_{key}"], s["within_pairs"] = within_problem_auc(recs, key)
+        if key in ("last", "mean", "neg_len") and c and w:
+            s[f"within_auc_{key}_ci"] = bootstrap_within(recs, key)
         s[f"{key}_correct_mean"] = float(np.mean([r[key] for r in c])) if c else None
         s[f"{key}_incorrect_mean"] = float(np.mean([r[key] for r in w])) if w else None
     s["prompt_value_mean"] = float(np.mean([r["prompt_value"] for r in recs]))
@@ -183,6 +206,8 @@ def cmd_repro(args):
     p, r = tokenize_pair(str(CRITIC_DIR), P, R)
     for backend in ("eager", "flash_attention_2"):
         m = critic.load(DEVICE, backend)
+        if DEVICE == "cuda":
+            assert critic.BACKEND == backend, f"asked for {backend}, got {critic.BACKEND}"
         s = m.score_tokens(p, r)
         lat = critic.timed(m.score_tokens, p, r, warmup=2, reps=5)
         out[backend] = {"prompt_value": s["prompt_value"], "mean": s["mean_response_pre_action_value"],
@@ -219,6 +244,14 @@ def cmd_rank(args):
             s = summarize(sc)
             s["score_seconds"] = time.time() - t0
             res[f"{g}|{variant}"] = s
+            fin = [x for x in sc if x["finished"]]
+            if variant == "raw" and len(fin) < len(sc) and any(x["correct"] for x in fin) and not all(x["correct"] for x in fin):
+                res[f"{g}|raw_finished"] = summarize(fin)
+            if variant == "raw":
+                with open(RESULTS / f"rank_samples_{g}{'_smoke' if SMOKE else ''}.jsonl", "w") as f:
+                    for x in sc:
+                        f.write(json.dumps({k: x[k] for k in ("idx", "sample", "finished", "correct", "n", "prompt_value",
+                                                               "last", "mean", "min", "raw_final", "t_drop", "drop")}) + "\n")
             print(g, variant, {k: (round(v, 3) if isinstance(v, float) else v) for k, v in s.items()
                                if k.startswith(("auc_last", "auc_mean", "within_auc_last", "accuracy", "n_correct"))})
             if variant == "raw":
@@ -325,12 +358,13 @@ def cmd_probes(args):
         add("uniform ids, 1024", i, ids=[int(t) for t in rng.integers(0, QWEN25_VOCAB, 1024)])
         add("small-vocab ids, 256", i, ids=[int(t) for t in rng.choice(sv, 256)])
         add("<think> + uniform ids, 256", i, ids=tok.encode("<think>\n", add_special_tokens=False) + [int(t) for t in rng.integers(0, QWEN25_VOCAB, 256)])
-        add("answer only, gold", i, f"The answer is \\boxed{{{gold}}}." )
-        add("answer only, wrong", i, f"The answer is \\boxed{{{wrong}}}.")
+        eos = [CRITIC_EOS]
+        add("answer only, gold", i, ids=tok.encode(f"The answer is \\boxed{{{gold}}}.", add_special_tokens=False) + eos)
+        add("answer only, wrong", i, ids=tok.encode(f"The answer is \\boxed{{{wrong}}}.", add_special_tokens=False) + eos)
         sol = r["solution"].split("####")[0].strip()
         sol = __import__("re").sub(r"<<[^>]*>>", "", sol)
-        add("reference solution, gold answer", i, f"{sol}\nThe answer is \\boxed{{{gold}}}.")
-        add("reference solution, wrong answer", i, f"{sol}\nThe answer is \\boxed{{{wrong}}}.")
+        add("reference solution, gold answer", i, ids=tok.encode(f"{sol}\nThe answer is \\boxed{{{gold}}}.", add_special_tokens=False) + eos)
+        add("reference solution, wrong answer", i, ids=tok.encode(f"{sol}\nThe answer is \\boxed{{{wrong}}}.", add_special_tokens=False) + eos)
         if i in ref_by_idx:
             ids = list(ref_by_idx[i]["response_ids"])
             body = ids[:-1]
@@ -394,6 +428,7 @@ def cmd_ascent(args):
 @torch.no_grad()
 def cmd_speed(args):
     m = critic.load(DEVICE, "flash_attention_2")
+    assert critic.BACKEND == "flash_attention_2", "speed needs FlashAttention-2"
     rows = load_gsm8k("test")
     q = {r["idx"]: r["question"] for r in rows}
     out = {"gpu": torch.cuda.get_device_name(0)}

@@ -61,7 +61,9 @@ def build_data(state):
             r = rank.get(f"{k}|raw")
             if r:
                 d["rank"][k] = {f: r.get(f) for f in ("accuracy", "auc_last", "auc_last_ci", "auc_mean", "auc_mean_ci",
-                                                      "within_auc_last", "curve_correct", "curve_incorrect", "n")}
+                                                      "within_auc_last", "within_auc_last_ci", "within_auc_neg_len",
+                                                      "within_auc_neg_len_ci", "auc_neg_len", "auc_prompt_value",
+                                                      "curve_correct", "curve_incorrect", "n")}
         d["ref_acc"] = rank.get("qwen0.5b-instruct|raw", {}).get("accuracy")
     if probes:
         rows = []

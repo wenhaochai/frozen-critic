@@ -49,16 +49,18 @@ _NUM = re.compile(r"-?\d+(?:\.\d+)?")
 
 
 def normalize_number(s):
+    """The single number inside a boxed answer, or None. Handles $, %, thousands separators (, and \\,),
+    \\text{...} wrappers and a plain \\frac{a}{b}; anything with more than one number is not an answer."""
     if s is None:
         return None
-    s = s.replace(",", "").replace("\\$", "").replace("$", "").replace("\\%", "").replace("%", "")
-    s = re.sub(r"\\text\{[^}]*\}", "", s)
-    s = re.sub(r"\\(?:mathrm|textbf|mathbf)\{([^}]*)\}", r"\1", s)
-    s = s.replace("\\!", "").replace("{", "").replace("}", "").strip()
-    frac = re.fullmatch(r"\\d?frac(-?\d+)(-?\d+)", s.replace(" ", ""))
+    s = s.replace("\\!", "").replace("\\,", "").replace(",", "").replace("\\$", "").replace("$", "")
+    s = s.replace("\\%", "").replace("%", "").replace("\\left", "").replace("\\right", "")
+    frac = re.fullmatch(r"\s*(-?)\\[dt]?frac\{(-?\d+)\}\{(-?\d+)\}\s*", s)
     if frac:
-        a, b = int(frac.group(1)), int(frac.group(2))
-        return a / b if b else None
+        a, b = int(frac.group(2)), int(frac.group(3))
+        return (-1 if frac.group(1) else 1) * a / b if b else None
+    s = re.sub(r"\\(?:text|mathrm|textbf|mathbf|textrm)\{([^}]*)\}", r" \1 ", s)
+    s = s.replace("{", " ").replace("}", " ").strip()
     m = _NUM.findall(s)
     if len(m) != 1:
         return None

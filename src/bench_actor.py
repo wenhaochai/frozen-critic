@@ -27,7 +27,7 @@ for size in args.sizes.split(","):
     cfg = AutoConfig.from_pretrained(f"Qwen/Qwen2.5-{size}-Instruct")
     cfg._attn_implementation = attn
     model = AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16).cuda()
-    model.gradient_checkpointing_enable() if size in ("3B", "7B") else None
+    model.gradient_checkpointing_enable()  # every size, so the sizes compare and 1.5B fits beside fp32 logits
     n_params = sum(p.numel() for p in model.parameters())
     n_embed = model.model.embed_tokens.weight.numel()
     bs = max(1, args.tokens_per_step // args.seq)
@@ -43,7 +43,7 @@ for size in args.sizes.split(","):
         model(input_ids=ids, logits_to_keep=0)
 
     res = {"params_B": n_params / 1e9, "non_embedding_params_B": (n_params - n_embed) / 1e9, "batch": bs, "seq": args.seq,
-           "grad_ckpt": size in ("3B", "7B")}
+           "grad_ckpt": True}
     for name, fn in (("fwd_bwd", fwd_bwd), ("fwd", fwd)):
         try:
             torch.cuda.reset_peak_memory_stats()
@@ -62,6 +62,7 @@ for size in args.sizes.split(","):
             torch.cuda.empty_cache()
     out[size] = res
     print(size, json.dumps(res), flush=True)
+    (RESULTS / "bench_actor.json").write_text(json.dumps(out, indent=1))
     del model
     torch.cuda.empty_cache()
 (RESULTS / "bench_actor.json").write_text(json.dumps(out, indent=1))
