@@ -34,8 +34,7 @@ PROBES = [  # (key in probes.json, kind, en, zh)
     ("probe|correct sample, first half", "damaged", "First half of a correct sample", "答对样本的前一半"),
     ("probe|correct sample, first half + repeated phrase", "damaged", "First half, then one phrase 30 times", "前一半后接一句话重复 30 次"),
     ("probe|correct sample, tokens shuffled", "damaged", "Correct sample, tokens shuffled", "答对样本，token 打乱"),
-    ("random0.5b", "random", "Random-init Qwen2.5-0.5B actor", "随机初始化的 Qwen2.5-0.5B actor"),
-    ("random1.5b", "random", "Random-init Qwen2.5-1.5B actor", "随机初始化的 Qwen2.5-1.5B actor"),
+    ("random-q4d1b", "random", "Random-init actor (dense Qwen3.8-Flash-Next, 1B)", "随机初始化的 actor（稠密 Qwen3.8-Flash-Next，1B）"),
     ("probe|uniform ids, 256", "random", "256 uniform random tokens", "256 个均匀随机 token"),
     ("probe|uniform ids, 1024", "random", "1,024 uniform random tokens", "1,024 个均匀随机 token"),
     ("probe|<think> + uniform ids, 256", "random", "<think>, then 256 random tokens", "<think> 后接 256 个随机 token"),
@@ -91,18 +90,18 @@ def build_data(state):
         d["ascent"] = a
     if roll and speed and actor:
         steps = []
-        crit = speed.get("random0.5b") or speed.get("qwen1.5b-instruct")
+        crit = speed.get("random-q4d1b") or speed.get("qwen1.5b-instruct")
         crit_tps = max(v["tok_per_s"] for k, v in crit.items() if k.startswith("packed_"))
-        for size in ("0.5B", "1.5B", "3B", "7B"):
-            r, a = roll.get(size), actor.get(size)
+        for size in ("0.5b", "1b", "2b", "4b"):
+            r, a = roll.get(f"actor-q4dense-{size}"), actor.get(size)
             if not r or not isinstance(a, dict) or not isinstance(a.get("fwd_bwd"), dict):
                 continue
             n_seq = r["n_seqs"]
             # Tokens the critic and the actor process: the responses plus their prompts. Random-actor responses all run
             # to 1,024 tokens, so the prompt length is the mean scored length minus 1,024.
-            prompt_tok = crit["mean_seq_tokens"] - 1024 if "random0.5b" in speed else 130
+            prompt_tok = crit["mean_seq_tokens"] - 1024 if "random-q4d1b" in speed else 130
             tokens = r["tokens"] + n_seq * prompt_tok
-            steps.append({"size": size, "rollout_s": r["seconds"], "critic_s": tokens / crit_tps,
+            steps.append({"size": size.upper(), "params_B": r.get("params_B"), "rollout_s": r["seconds"], "critic_s": tokens / crit_tps,
                           "actor_s": tokens / a["fwd"]["tok_per_s"] + tokens / a["fwd_bwd"]["tok_per_s"],
                           "tokens": tokens})
         d["step"] = steps
@@ -117,7 +116,7 @@ def build_data(state):
         d["status"]["step"] = "done"
     for lam in ("0.95", "0.5", "0"):
         d["record"].append({"setup_en": f"PPO with the frozen critic, GAE λ = {lam}",
-                            "setup_zh": f"PPO + 冻结 critic，GAE λ = {lam}", "actor": "Qwen2.5-0.5B, random init",
+                            "setup_zh": f"PPO + 冻结 critic，GAE λ = {lam}", "actor": "Dense Qwen3.8-Flash-Next 1B, random init",
                             "lam": lam, "figs": [["6", "c-acc"], ["7", "c-monitor"]], "done": False})
     return d
 

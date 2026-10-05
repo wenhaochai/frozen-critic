@@ -168,7 +168,7 @@ ArticleCharts.define(function (C, t) {
                 { k: 'critic_s', label: { en: 'Critic scoring', zh: 'critic 打分' }, color: YEL },
                 { k: 'actor_s', label: { en: 'Actor update', zh: '更新 actor' }, color: GRN }];
   C.custom('c-step', STAGES.map(function (s) { return { label: s.label, color: s.color }; }), function (body, h) {
-    var T = D.step, sizes = ['0.5B', '1.5B', '3B', '7B'], el = h.el, W = 640, rowH = 40, mL = 92, mR = 70, mT = 14, H = mT + sizes.length * rowH + 44;
+    var T = D.step, sizes = ['0.5B', '1B', '2B', '4B'], el = h.el, W = 640, rowH = 40, mL = 92, mR = 70, mT = 14, H = mT + sizes.length * rowH + 44;
     var b = { x: mL, y: mT, w: W - mL - mR, h: sizes.length * rowH };
     var xmax = 10;
     if (T) { xmax = Math.max.apply(null, T.map(function (r) { return (r.rollout_s + r.critic_s + r.actor_s) / 60; })); xmax = Math.ceil(xmax / (xmax > 10 ? 5 : 1)) * (xmax > 10 ? 5 : 1); }

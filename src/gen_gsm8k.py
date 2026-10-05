@@ -12,7 +12,7 @@ import time
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
-from common import (CRITIC_DIR, CRITIC_EOS, QWEN25_VOCAB, RESULTS, grade, load_gsm8k, user_prompt)
+from common import (CRITIC_DIR, CRITIC_EOS, CRITIC_VOCAB, RESULTS, grade, load_gsm8k, user_prompt)
 
 
 def main():
@@ -26,6 +26,7 @@ def main():
     ap.add_argument("--random-init", action="store_true", help="keep sampled ids; tokenizer from --tokenizer")
     ap.add_argument("--tokenizer", default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--load-format", default="auto", help="'dummy': vLLM's random weights (no checkpoint needed)")
     args = ap.parse_args()
 
     rows = load_gsm8k("test")[: args.n_problems]
@@ -36,6 +37,7 @@ def main():
     prefill_think = prompts[0].endswith("<think>\n")  # R1-distill templates open the think span themselves
 
     llm = LLM(model=args.model, tokenizer=args.tokenizer or args.model, dtype="bfloat16", seed=args.seed,
+              load_format=args.load_format, gdn_prefill_backend="triton",  # offline nodes: no flashinfer JIT for GDN
               gpu_memory_utilization=0.85, max_model_len=args.max_tokens + 512, enable_prefix_caching=True)
     # No per-request seed: vLLM derives each request's Gumbel noise from (seed, position, token), so one seed shared
     # by all prompts would give sample k of every prompt the same noise. LLM(seed=...) still makes runs repeatable.
@@ -54,7 +56,7 @@ def main():
                 text = ("<think>\n" if prefill_think else "") + c.text
                 if args.random_init:
                     resp_ids = [int(t) for t in c.token_ids]
-                    assert max(resp_ids) < QWEN25_VOCAB, "random actor emitted a padding id"
+                    assert max(resp_ids) < CRITIC_VOCAB, "random actor emitted an id outside the critic vocabulary"
                     # vLLM includes the stop token in token_ids when it stops on EOS; map any stop id to critic EOS.
                     if finished and resp_ids and resp_ids[-1] in (151643, 151645):
                         resp_ids = resp_ids[:-1]

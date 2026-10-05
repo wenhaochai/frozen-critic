@@ -9,7 +9,7 @@ from vllm import LLM, SamplingParams
 from common import RESULTS, load_gsm8k, user_prompt
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--sizes", default="0.5B,1.5B,3B,7B")
+ap.add_argument("--models", default="actor-q4dense-0.5b,actor-q4dense-1b,actor-q4dense-2b,actor-q4dense-4b,proxy-q35dense-1b")
 ap.add_argument("--n-prompts", type=int, default=256)
 ap.add_argument("--n-samples", type=int, default=8)
 ap.add_argument("--max-tokens", type=int, default=1024)
@@ -17,10 +17,17 @@ args = ap.parse_args()
 
 rows = load_gsm8k("test")[: args.n_prompts]
 out = {}
-for size in args.sizes.split(","):
-    name = f"Qwen/Qwen2.5-{size}-Instruct"
+from common import ROOT
+for size in args.models.split(","):
+    name = str(ROOT / "models" / size)
     llm = LLM(model=name, load_format="dummy", dtype="bfloat16", seed=0, gpu_memory_utilization=0.85,
+              gdn_prefill_backend="triton",
               max_model_len=args.max_tokens + 512, enable_prefix_caching=True)
+    try:
+        n_params = llm.apply_model(lambda m: sum(p.numel() for p in m.parameters()))[0]
+    except Exception as e:  # count only; the speed number does not depend on it
+        print("param count failed:", e)
+        n_params = None
     tok = llm.get_tokenizer()
     prompts = [tok.apply_chat_template([{"role": "user", "content": user_prompt(r["question"])}], tokenize=False,
                                        add_generation_prompt=True) for r in rows]
@@ -31,7 +38,7 @@ for size in args.sizes.split(","):
     dt = time.time() - t0
     ntok = sum(len(c.token_ids) for o in res for c in o.outputs)
     out[size] = {"seconds": dt, "tokens": ntok, "tok_per_s": ntok / dt, "n_seqs": len(prompts) * args.n_samples,
-                 "max_tokens": args.max_tokens}
+                 "max_tokens": args.max_tokens, "params_B": n_params / 1e9 if n_params else None}
     print(size, json.dumps(out[size]), flush=True)
     (RESULTS / "bench_rollout.json").write_text(json.dumps(out, indent=1))
     del llm

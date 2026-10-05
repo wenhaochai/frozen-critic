@@ -1,6 +1,8 @@
 """Actor-side compute on one H100: forward+backward and forward-only token throughput of randomly initialised
-Qwen2.5 models (bf16 weights, FlashAttention-2 when installed), on equal-length sequences without padding.
-The optimizer step is left out (it is per parameter, not per token); 7B runs with bf16 weights and grads only."""
+dense actors, on equal-length sequences without padding. transformers 5.6.2 has no qwen4_exp, so each size of the
+dense Qwen3.8-Flash-Next actor is measured on its qwen3_5 proxy (models/proxy-q35dense-*: same width, depth, MLP and
+heads, Gated DeltaNet via flash-linear-attention; no hyper-connections, indexer or n-gram embedding). Gradient
+checkpointing on every size. The optimizer step is left out (it is per parameter, not per token)."""
 import argparse
 import json
 import time
@@ -11,7 +13,7 @@ from transformers import AutoConfig, AutoModelForCausalLM
 from common import RESULTS
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--sizes", default="0.5B,1.5B,3B,7B")
+ap.add_argument("--sizes", default="0.5b,1b,2b,4b")
 ap.add_argument("--seq", type=int, default=1152)       # ~130 prompt + 1024 response tokens
 ap.add_argument("--tokens-per-step", type=int, default=16384)
 args = ap.parse_args()
@@ -24,14 +26,15 @@ except ImportError:
 out = {"attn": attn, "gpu": torch.cuda.get_device_name(0)}
 H100_BF16 = 989e12
 for size in args.sizes.split(","):
-    cfg = AutoConfig.from_pretrained(f"Qwen/Qwen2.5-{size}-Instruct")
+    from common import ROOT
+    cfg = AutoConfig.from_pretrained(str(ROOT / "models" / f"proxy-q35dense-{size}"))
     cfg._attn_implementation = attn
     model = AutoModelForCausalLM.from_config(cfg, torch_dtype=torch.bfloat16).cuda()
     model.gradient_checkpointing_enable()  # every size, so the sizes compare and 1.5B fits beside fp32 logits
     n_params = sum(p.numel() for p in model.parameters())
     n_embed = model.model.embed_tokens.weight.numel()
     bs = max(1, args.tokens_per_step // args.seq)
-    ids = torch.randint(0, 151665, (bs, args.seq), device="cuda")
+    ids = torch.randint(0, 151667, (bs, args.seq), device="cuda")
 
     def fwd_bwd():
         loss = model(input_ids=ids, labels=ids).loss

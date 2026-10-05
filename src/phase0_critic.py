@@ -25,7 +25,7 @@ RAW = RESULTS / "raw"
 DEVICE = os.environ.get("FC_DEVICE", "cuda")
 SMOKE = int(os.environ.get("FC_SMOKE", "0"))   # >0: keep this many records per generator, write *_smoke.json
 NORMAL_GENS = ["qwen0.5b-instruct", "qwen1.5b-instruct", "qwen-math1.5b-instruct", "r1distill1.5b"]
-RANDOM_GENS = ["random0.5b", "random1.5b"]
+RANDOM_GENS = ["random-q4d1b"]   # dense Qwen3.8-Flash-Next actor, ~1B, vLLM random (dummy) weights
 N_BINS = 20
 
 
@@ -432,7 +432,7 @@ def cmd_speed(args):
     rows = load_gsm8k("test")
     q = {r["idx"]: r["question"] for r in rows}
     out = {"gpu": torch.cuda.get_device_name(0)}
-    for gname in ("qwen1.5b-instruct", "random0.5b"):
+    for gname in ("qwen1.5b-instruct", "random-q4d1b"):
         recs = load_gen(gname)
         if not recs:
             continue
