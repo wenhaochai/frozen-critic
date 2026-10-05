@@ -5,3 +5,5 @@ results/raw/
 __pycache__/
 *.pyc
 slurm-*.out
+site/_artifact/
+.venv-shot/

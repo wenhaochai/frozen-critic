@@ -287,6 +287,8 @@ def cmd_probes(args):
                   "curve_p10": np.percentile([x["bins"] for x in sc], 10, axis=0).tolist(),
                   "curve_p90": np.percentile([x["bins"] for x in sc], 90, axis=0).tolist(),
                   "curves_first64": [x["_pre"][:64].tolist() for x in sc[:8]],
+                  "last_values": [x["last"] for x in sc], "mean_values": [x["mean"] for x in sc],
+                  "prompt_values": [x["prompt_value"] for x in sc],
                   "examples": [tok.decode(r["response_ids"][:80]) for r in recs[:4]]}
         print(g, {k: round(v, 3) for k, v in out[g].items() if isinstance(v, float)})
     # Reference: the same statistics on real solutions of the strongest normal generator.
