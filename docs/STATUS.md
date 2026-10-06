@@ -25,7 +25,7 @@ source `blogs/frozen-critic.html` on branch `pretrain-practice` of the website c
 | Random-actor samples and constructed probes | done, results/*.json; `phase0_critic.py probes` | queued |
 | Greedy value ascent | done, results/*.json; `phase0_critic.py ascent` | queued |
 | Critic scoring throughput | done, results/*.json; `phase0_critic.py speed` | queued |
-| Rollout and actor throughput by actor size (dense Qwen3.8-Flash-Next; actor update on a same-shape qwen3_5 proxy) | `bench_rollout.py` done; `bench_actor.py` rerun as job 15132135/6 (fla needs tilelang on Hopper with Triton 3.6) |
+| Rollout and actor throughput by actor size (dense Qwen3.8-Flash-Next; actor update on a same-shape qwen3_5 proxy) | done: rollout job 15021750, actor update job 15132135 (fla needs tilelang on Hopper with Triton 3.6); 1B step on one H100 = 113 s rollout + 17 s critic + 130 s update |
 
 Generations (GSM8K test, 500 problems x 4 samples, temperature 1, strict last-`\boxed{}` grader), job 15011145:
 
