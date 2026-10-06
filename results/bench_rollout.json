@@ -1,0 +1,42 @@
+{
+ "actor-q4dense-0.5b": {
+  "seconds": 99.6105260848999,
+  "tokens": 2097152,
+  "tok_per_s": 21053.517960667716,
+  "n_seqs": 2048,
+  "max_tokens": 1024,
+  "params_B": null
+ },
+ "actor-q4dense-1b": {
+  "seconds": 112.89472699165344,
+  "tokens": 2097152,
+  "tok_per_s": 18576.17318260619,
+  "n_seqs": 2048,
+  "max_tokens": 1024,
+  "params_B": null
+ },
+ "actor-q4dense-2b": {
+  "seconds": 133.15766501426697,
+  "tokens": 2097152,
+  "tok_per_s": 15749.390016528932,
+  "n_seqs": 2048,
+  "max_tokens": 1024,
+  "params_B": null
+ },
+ "actor-q4dense-4b": {
+  "seconds": 182.32299065589905,
+  "tokens": 2097152,
+  "tok_per_s": 11502.400177046167,
+  "n_seqs": 2048,
+  "max_tokens": 1024,
+  "params_B": null
+ },
+ "proxy-q35dense-1b": {
+  "seconds": 92.7441394329071,
+  "tokens": 2097152,
+  "tok_per_s": 22612.2320269856,
+  "n_seqs": 2048,
+  "max_tokens": 1024,
+  "params_B": null
+ }
+}

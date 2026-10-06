@@ -79,7 +79,7 @@ ArticleCharts.define(function (C, t) {
 
   /* Figure 2: value along the response, correct vs incorrect, one panel per generator */
   C.custom('c-curves', [{ label: { en: 'Correct', zh: '答对' }, color: BLUE, line: true }, { label: { en: 'Incorrect', zh: '答错' }, color: RED, line: true }], function (body, h) {
-    var el = h.el, W = 640, cols = 2, pw = 268, ph = 150, gapX = 56, gapY = 58, top = 30, left = 44;
+    var el = h.el, W = 640, cols = 2, pw = 258, ph = 150, gapX = 60, gapY = 58, top = 30, left = 44;
     var n = Math.max(GENS.length, 4), rows = Math.ceil(n / cols), H = top + rows * ph + (rows - 1) * gapY + 52;
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Critic value along the response', zh: '回答各位置的 critic 值' }) }, body);
     var R = D.rank, lo = 0.2, hi = 0.9;
