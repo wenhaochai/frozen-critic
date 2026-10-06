@@ -294,6 +294,33 @@ def small_vocab():
     return ids
 
 
+def random_stats(m, rows, g, tok):
+    """Value statistics on one random-actor generation file (its own sampled ids)."""
+    recs = load_gen(g)
+    if not recs:
+        return None
+    sc = score_records(m, recs, "raw", rows)
+    pre = [x["_pre"] for x in sc]
+    allv = np.concatenate(pre)
+    deltas = np.concatenate([np.diff(p) for p in pre])
+    st = {"n": len(sc), "mean_len": float(np.mean([len(p) for p in pre])),
+              "finished_frac": float(np.mean([x["finished"] for x in sc])),
+              "prompt_value_mean": float(np.mean([p[0] for p in pre])),
+              "value_mean": float(allv.mean()), "value_std": float(allv.std()),
+              "value_p01": float(np.percentile(allv, 1)), "value_p99": float(np.percentile(allv, 99)),
+              "value_max": float(allv.max()), "value_min": float(allv.min()),
+              "delta_std": float(deltas.std()), "delta_abs_mean": float(np.abs(deltas).mean()),
+              "curve_mean": np.mean([x["bins"] for x in sc], 0).tolist(),
+              "curve_p10": np.percentile([x["bins"] for x in sc], 10, axis=0).tolist(),
+              "curve_p90": np.percentile([x["bins"] for x in sc], 90, axis=0).tolist(),
+              "curves_first64": [x["_pre"][:64].tolist() for x in sc[:8]],
+              "last_values": [x["last"] for x in sc], "mean_values": [x["mean"] for x in sc],
+              "prompt_values": [x["prompt_value"] for x in sc],
+              "examples": [tok.decode(r["response_ids"][:80]) for r in recs[:4]]}
+    print(g, {k: round(v, 3) for k, v in st.items() if isinstance(v, float)})
+    return st
+
+
 def cmd_probes(args):
     m = critic.load(DEVICE, "flash_attention_2")
     rows = load_gsm8k("test")
@@ -302,28 +329,9 @@ def cmd_probes(args):
     out = {}
     # 1. Random-init actor samples (their own sampled ids).
     for g in RANDOM_GENS:
-        recs = load_gen(g)
-        if not recs:
-            continue
-        sc = score_records(m, recs, "raw", rows)
-        pre = [x["_pre"] for x in sc]
-        allv = np.concatenate(pre)
-        deltas = np.concatenate([np.diff(p) for p in pre])
-        out[g] = {"n": len(sc), "mean_len": float(np.mean([len(p) for p in pre])),
-                  "finished_frac": float(np.mean([x["finished"] for x in sc])),
-                  "prompt_value_mean": float(np.mean([p[0] for p in pre])),
-                  "value_mean": float(allv.mean()), "value_std": float(allv.std()),
-                  "value_p01": float(np.percentile(allv, 1)), "value_p99": float(np.percentile(allv, 99)),
-                  "value_max": float(allv.max()), "value_min": float(allv.min()),
-                  "delta_std": float(deltas.std()), "delta_abs_mean": float(np.abs(deltas).mean()),
-                  "curve_mean": np.mean([x["bins"] for x in sc], 0).tolist(),
-                  "curve_p10": np.percentile([x["bins"] for x in sc], 10, axis=0).tolist(),
-                  "curve_p90": np.percentile([x["bins"] for x in sc], 90, axis=0).tolist(),
-                  "curves_first64": [x["_pre"][:64].tolist() for x in sc[:8]],
-                  "last_values": [x["last"] for x in sc], "mean_values": [x["mean"] for x in sc],
-                  "prompt_values": [x["prompt_value"] for x in sc],
-                  "examples": [tok.decode(r["response_ids"][:80]) for r in recs[:4]]}
-        print(g, {k: round(v, 3) for k, v in out[g].items() if isinstance(v, float)})
+        st = random_stats(m, rows, g, tok)
+        if st:
+            out[g] = st
     # Reference: the same statistics on real solutions of the strongest normal generator.
     ref = load_gen("qwen-math1.5b-instruct") or load_gen("qwen1.5b-instruct")
     if ref:
@@ -423,6 +431,44 @@ def cmd_ascent(args):
                                 "text": tok.decode(resp), "seconds": time.time() - t0})
             print(pool_name, r["idx"], f"v0={v0:.3f} -> {traj[-1]:.3f} max={max(traj):.3f}", repr(tok.decode(resp)[:120]))
     save("ascent", out)
+    # Job 15021750 sampled the random actor late (inside bench_rollout); add what probes and speed skipped.
+    rows_all = load_gsm8k("test")
+    for name, key, fn in (("probes", "random-q4d1b", lambda: random_stats(m, rows_all, "random-q4d1b", tok)),
+                          ("speed", "random-q4d1b", lambda: speed_for(m, "random-q4d1b", {r["idx"]: r["question"] for r in rows_all}))):
+        path = RESULTS / f"{name}.json"
+        if path.exists() and load_gen(key):
+            d = json.loads(path.read_text())
+            if key not in d:
+                st = fn()
+                if st:
+                    d[key] = st
+                    path.write_text(json.dumps(d, indent=1, default=float))
+                    print(f"added {key} to {path}")
+
+
+def speed_for(m, gname, q):
+    """Scoring throughput on one generation file: the released single-sequence API, then packs."""
+    recs = load_gen(gname)
+    if not recs:
+        return None
+    seqs = [(i, prompt_ids(q[x["idx"]]), x["response_ids"]) for i, x in enumerate(recs)]
+    mean_len = float(np.mean([len(a) + len(b) for _, a, b in seqs]))
+    res = {"mean_seq_tokens": mean_len}
+    # Released API: one sequence per call.
+    sub = seqs[:32]
+    t = critic.timed(lambda: [m.score_tokens(list(a), list(b)) for _, a, b in sub], warmup=1, reps=2)
+    res["single_api_ms_per_seq"] = t / len(sub) * 1e3
+    res["single_api_tok_per_s"] = sum(len(a) + len(b) for _, a, b in sub) / t
+    for pack in (8192, 16384, 32768, 65536, 131072):
+        sub = seqs[: max(1, int(pack // mean_len) * 4)]
+        torch.cuda.reset_peak_memory_stats()
+        t = critic.timed(critic.score_items, m, sub, pack, warmup=1, reps=2)
+        ntok = sum(len(a) + len(b) for _, a, b in sub)
+        res[f"packed_{pack}"] = {"tok_per_s": ntok / t, "seqs_per_s": len(sub) / t,
+                                 "peak_gib": torch.cuda.max_memory_allocated() / 2**30}
+        print(gname, pack, f"{ntok/t:,.0f} tok/s", f"{len(sub)/t:,.1f} seq/s",
+              f"{torch.cuda.max_memory_allocated()/2**30:.1f} GiB")
+    return res
 
 
 @torch.no_grad()
@@ -433,27 +479,9 @@ def cmd_speed(args):
     q = {r["idx"]: r["question"] for r in rows}
     out = {"gpu": torch.cuda.get_device_name(0)}
     for gname in ("qwen1.5b-instruct", "random-q4d1b"):
-        recs = load_gen(gname)
-        if not recs:
-            continue
-        seqs = [(i, prompt_ids(q[x["idx"]]), x["response_ids"]) for i, x in enumerate(recs)]
-        mean_len = float(np.mean([len(a) + len(b) for _, a, b in seqs]))
-        res = {"mean_seq_tokens": mean_len}
-        # Released API: one sequence per call.
-        sub = seqs[:32]
-        t = critic.timed(lambda: [m.score_tokens(list(a), list(b)) for _, a, b in sub], warmup=1, reps=2)
-        res["single_api_ms_per_seq"] = t / len(sub) * 1e3
-        res["single_api_tok_per_s"] = sum(len(a) + len(b) for _, a, b in sub) / t
-        for pack in (8192, 16384, 32768, 65536, 131072):
-            sub = seqs[: max(1, int(pack // mean_len) * 4)]
-            torch.cuda.reset_peak_memory_stats()
-            t = critic.timed(critic.score_items, m, sub, pack, warmup=1, reps=2)
-            ntok = sum(len(a) + len(b) for _, a, b in sub)
-            res[f"packed_{pack}"] = {"tok_per_s": ntok / t, "seqs_per_s": len(sub) / t,
-                                     "peak_gib": torch.cuda.max_memory_allocated() / 2**30}
-            print(gname, pack, f"{ntok/t:,.0f} tok/s", f"{len(sub)/t:,.1f} seq/s",
-                  f"{torch.cuda.max_memory_allocated()/2**30:.1f} GiB")
-        out[gname] = res
+        res = speed_for(m, gname, q)
+        if res:
+            out[gname] = res
     save("speed", out)
 
 

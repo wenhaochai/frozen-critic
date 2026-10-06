@@ -6,7 +6,10 @@ import time
 
 from vllm import LLM, SamplingParams
 
-from common import RESULTS, load_gsm8k, user_prompt
+import subprocess
+import sys
+
+from common import CRITIC_DIR, RESULTS, load_gsm8k, user_prompt
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--models", default="actor-q4dense-0.5b,actor-q4dense-1b,actor-q4dense-2b,actor-q4dense-4b,proxy-q35dense-1b")
@@ -16,11 +19,17 @@ ap.add_argument("--max-tokens", type=int, default=1024)
 args = ap.parse_args()
 
 rows = load_gsm8k("test")[: args.n_prompts]
+# The random-actor sampling step of job 15021750 failed (transformers' qwen4_exp config rejects num_experts=0 when
+# the tokenizer is loaded from the model dir); rerun it here with the critic's identical tokenizer files.
+if not (RESULTS / "raw" / "gen_random-q4d1b.jsonl").exists():
+    subprocess.run([sys.executable, "gen_gsm8k.py", "--model", "../models/actor-q4dense-1b", "--tokenizer", str(CRITIC_DIR),
+                    "--name", "random-q4d1b", "--random-init", "--load-format", "dummy", "--n-problems", "256",
+                    "--n-samples", "8", "--max-tokens", "1024"], check=False)
 out = {}
 from common import ROOT
 for size in args.models.split(","):
     name = str(ROOT / "models" / size)
-    llm = LLM(model=name, load_format="dummy", dtype="bfloat16", seed=0, gpu_memory_utilization=0.85,
+    llm = LLM(model=name, tokenizer=str(CRITIC_DIR), load_format="dummy", dtype="bfloat16", seed=0, gpu_memory_utilization=0.85,
               gdn_prefill_backend="triton",
               max_model_len=args.max_tokens + 512, enable_prefix_caching=True)
     try:
