@@ -24,8 +24,9 @@ TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "mer
                    "special_tokens_map.json", "chat_template.jinja"]
 
 # name: hidden, layers, ffn, attention heads (head_dim 256), GDN value heads (dim 128)
-SIZES = {"0.5b": (1024, 16, 3072, 8, 16), "1b": (1280, 24, 3840, 10, 20),
-         "2b": (2048, 24, 6144, 16, 32), "4b": (2560, 32, 7680, 20, 40)}
+# GDN value heads must be a multiple of the 16 key heads (vLLM kernel check).
+SIZES = {"0.5b": (1024, 16, 3072, 8, 16), "1b": (1280, 24, 3840, 10, 16),
+         "2b": (2048, 24, 6144, 16, 32), "4b": (2560, 32, 7680, 20, 48)}
 
 
 def layer_types(n):

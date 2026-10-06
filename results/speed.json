@@ -1,0 +1,34 @@
+{
+ "gpu": "NVIDIA H100 80GB HBM3",
+ "qwen1.5b-instruct": {
+  "mean_seq_tokens": 398.204,
+  "single_api_ms_per_seq": 36.57511994242668,
+  "single_api_tok_per_s": 11730.993655670638,
+  "packed_8192": {
+   "tok_per_s": 115787.54030580897,
+   "seqs_per_s": 261.7998763344276,
+   "peak_gib": 2.3370418548583984
+  },
+  "packed_16384": {
+   "tok_per_s": 125207.88130821208,
+   "seqs_per_s": 306.9462844112945,
+   "peak_gib": 2.6718006134033203
+  },
+  "packed_32768": {
+   "tok_per_s": 132121.52240325228,
+   "seqs_per_s": 330.5860135806996,
+   "peak_gib": 3.34395170211792
+  },
+  "packed_65536": {
+   "tok_per_s": 137765.75075880144,
+   "seqs_per_s": 345.4715937024268,
+   "peak_gib": 4.6839189529418945
+  },
+  "packed_131072": {
+   "tok_per_s": 141831.5971403525,
+   "seqs_per_s": 356.63724503633034,
+   "peak_gib": 7.377411365509033
+  }
+ },
+ "_backend": "flash_attention_2"
+}

@@ -18,6 +18,14 @@ ap.add_argument("--seq", type=int, default=1152)       # ~130 prompt + 1024 resp
 ap.add_argument("--tokens-per-step", type=int, default=16384)
 args = ap.parse_args()
 
+# Random-actor samples failed twice earlier in job 15021750 (tokenizer read, then GDN head counts); retry here.
+import subprocess
+from common import CRITIC_DIR, ROOT as _ROOT
+if not (RESULTS / "raw" / "gen_random-q4d1b.jsonl").exists():
+    subprocess.run([str(_ROOT / ".venv-gen/bin/python"), "gen_gsm8k.py", "--model", "../models/actor-q4dense-1b",
+                    "--tokenizer", str(CRITIC_DIR), "--name", "random-q4d1b", "--random-init", "--load-format", "dummy",
+                    "--n-problems", "256", "--n-samples", "8", "--max-tokens", "1024"], check=False)
+
 try:
     import flash_attn  # noqa: F401
     attn = "flash_attention_2"
