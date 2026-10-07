@@ -18,11 +18,18 @@ p_ids = tok.apply_chat_template(msgs, tokenize=True, add_generation_prompt=True,
 assert p_ids == tokenize_pair(str(CRITIC_DIR), user_prompt(row["question"]), "a")[0], "prompt differs from the critic's"
 resp_text = "Janet sells 16 - 3 - 4 = 9 eggs. 9 * 2 = 18 dollars. The answer is \\boxed{18}."
 r_ids = tok.encode(resp_text, add_special_tokens=False) + [CRITIC_EOS]
-sample = SimpleNamespace(tokens=p_ids + r_ids, response_length=len(r_ids), response=resp_text, label=row["gold"])
+sample = SimpleNamespace(tokens=p_ids + r_ids, response_length=len(r_ids), response=resp_text, label=row["gold"],
+                         status="completed")
 out = asyncio.run(reward_func(None, sample))
 m = critic.load("cpu", "eager")
 ref = m.score_tokens(p_ids, r_ids)["pre_action_values"]
 diff = max(abs(a - b) for a, b in zip(out["values"], ref))
 print("score", out["score"], "n values", len(out["values"]), "response_length", len(r_ids), "max|server - score_tokens|", round(diff, 5))
-assert out["score"] == 1.0 and len(out["values"]) == len(r_ids) and diff < 5e-3
+assert out["score"] == 1.0 and out["train_score"] == 1.0 and len(out["values"]) == len(r_ids) and diff < 5e-3
+cut = SimpleNamespace(tokens=p_ids + r_ids[:-1], response_length=len(r_ids) - 1, response=resp_text, label=row["gold"],
+                      status="truncated")
+out2 = asyncio.run(reward_func(None, cut))
+ref2 = m.score_tokens(p_ids, r_ids[:-1])["raw_value_after_complete_input"]
+print("truncated: score", out2["score"], "train_score", round(out2["train_score"], 4), "V(full)", round(ref2, 4))
+assert abs(out2["train_score"] - (out2["score"] + ref2)) < 5e-3
 print("OK")

@@ -1,6 +1,7 @@
 """HTTP value service for the frozen Limite critic (runs on its own GPU, outside the miles Ray pool).
 
-POST /score {"prompt_ids": [...], "response_ids": [...]} -> {"values": [V(prompt, response[:t]) for t < L]}
+POST /score {"prompt_ids": [...], "response_ids": [...]}
+  -> {"values": [V(prompt, response[:t]) for t < L], "final": V(prompt, response) after the whole input}
 Concurrent requests are gathered for up to --window-ms or --max-tokens and scored in one packed FlashAttention-2
 forward (src/critic.py), so per-sample calls from the rollout workers batch themselves.
 GET /health -> {"ok": true, "scored": n}
@@ -18,7 +19,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--host", default="127.0.0.1")
 ap.add_argument("--port", type=int, required=True)
 ap.add_argument("--window-ms", type=float, default=30.0)
-ap.add_argument("--max-tokens", type=int, default=131072)
+ap.add_argument("--max-tokens", type=int, default=32768)  # per pack; bounds the cached activations on a shared GPU
 ap.add_argument("--device", default="cuda", help="cpu only for tests (eager backend)")
 args = ap.parse_args()
 
@@ -31,7 +32,7 @@ stats = {"scored": 0, "tokens": 0, "batches": 0, "busy_s": 0.0}
 def _score(batch):
     items = [(i, p, r) for i, (p, r, _) in enumerate(batch)]
     out = critic.score_items(model, items, max_tokens=args.max_tokens)
-    return [out[i]["pre"].tolist() for i in range(len(batch))]
+    return [(out[i]["pre"].tolist(), out[i]["raw_last"]) for i in range(len(batch))]
 
 
 async def batcher():
@@ -74,7 +75,8 @@ async def score(request):
         return web.json_response({"error": "token id outside the critic vocabulary"}, status=400)
     fut = asyncio.get_running_loop().create_future()
     await queue.put((p, r, fut))
-    return web.json_response({"values": await fut})
+    values, final = await fut
+    return web.json_response({"values": values, "final": final})
 
 
 async def health(_):

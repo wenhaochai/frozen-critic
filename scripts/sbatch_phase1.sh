@@ -13,7 +13,7 @@ RUN_DIR=$ROOT/runs/$RUN_NAME; mkdir -p "$RUN_DIR"
 JOBTMP=${TMPDIR:-/tmp}/fc_$SLURM_JOB_ID; mkdir -p "$JOBTMP"
 IFS=, read -ra DEV <<< "${CUDA_VISIBLE_DEVICES:?}"
 CRIT=${DEV[$((${#DEV[@]} - 1))]}
-VP=$((30000 + SLURM_JOB_ID % 2000))
+VP=$((40000 + SLURM_JOB_ID % 2000))   # above Ray's job-derived block (20000-32700)
 echo "[sbatch] $(date -u +%FT%TZ) node=$(hostname) job=$SLURM_JOB_ID run=$RUN_NAME gpus=$CUDA_VISIBLE_DEVICES critic_gpu=$CRIT port=$VP"
 (cd "$ROOT/src" && HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=$CRIT exec "$ROOT/.venv-critic/bin/python" value_server.py --port $VP) \
   > "$RUN_DIR/value_server.$SLURM_JOB_ID.log" 2>&1 &

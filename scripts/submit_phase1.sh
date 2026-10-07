@@ -21,7 +21,7 @@ CK=$ROOT/runs/$R/ckpt
 args=(--hf-checkpoint $SG --megatron-hf-checkpoint $MG --megatron-to-hf-mode bridge
   --ref-load $MG --load $CK --save $CK --save-interval $SAVE
   --prompt-data $D/gsm8k_train.parquet --input-key messages --label-key label --apply-chat-template --rollout-shuffle
-  --custom-rm-path miles_ext.frozen_critic_rm.reward_func --reward-key score
+  --custom-rm-path miles_ext.frozen_critic_rm.reward_func --reward-key train_score --eval-reward-key score
   --num-rollout $NR --rollout-batch-size $RB --n-samples-per-prompt $NS --global-batch-size $GBS
   --rollout-max-response-len 1024 --rollout-temperature 1.0 --rollout-top-p 1.0
   --eval-prompt-data gsm8k $EVD --eval-interval $EV --n-samples-per-eval-prompt 1 --eval-max-response-len 1024 --eval-top-k 1
@@ -40,6 +40,6 @@ args=(--hf-checkpoint $SG --megatron-hf-checkpoint $MG --megatron-to-hf-mode bri
 echo "$R: miles=$(git -C /scratch/gpfs/GROUP/USER/project/miles-frozen-critic rev-parse --short HEAD) repo=$(git -C $ROOT rev-parse --short HEAD) time=$TIME"
 [ -n "${DRY:-}" ] && { printf '  %s\n' "${args[*]}"; exit 0; }
 mkdir -p $ROOT/runs/$R $ROOT/logs/slurm
-jid=$(env RUN_NAME=$R GPUS=$GPUS sbatch --parsable --partition=pli --qos=pli-long --time=$TIME --gres=gpu:$GPUS \
+jid=$(env RUN_NAME=$R GPUS=$GPUS sbatch --parsable --partition=pli --qos=pli-low --time=$TIME --gres=gpu:$GPUS \
   --cpus-per-task=32 --mem=256G --job-name="fc-$R" $ROOT/scripts/sbatch_phase1.sh "${args[@]}")
 echo "  submitted: job $jid"
