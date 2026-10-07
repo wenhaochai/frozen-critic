@@ -45,7 +45,7 @@ def last_boxed(text: str):
     return None
 
 
-_NUM = re.compile(r"-?\d+(?:\.\d+)?")
+_NUM = re.compile(r"-?\d+(?:\.\d+)?")  # a comma left in place splits "3,4" into two numbers -> not an answer
 
 
 def normalize_number(s):
@@ -53,12 +53,18 @@ def normalize_number(s):
     \\text{...} wrappers and a plain \\frac{a}{b}; anything with more than one number is not an answer."""
     if s is None:
         return None
-    s = s.replace("\\!", "").replace("\\,", "").replace(",", "").replace("\\$", "").replace("$", "")
+    s = s.replace("\\!", "").replace("\\,", "").replace("\\$", "").replace("$", "")
+    # a comma is a thousands separator only before exactly three digits (18,000); otherwise it separates a list
+    s = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", s)
     s = s.replace("\\%", "").replace("%", "").replace("\\left", "").replace("\\right", "")
     frac = re.fullmatch(r"\s*(-?)\\[dt]?frac\{(-?\d+)\}\{(-?\d+)\}\s*", s)
     if frac:
         a, b = int(frac.group(2)), int(frac.group(3))
         return (-1 if frac.group(1) else 1) * a / b if b else None
+    slash = re.fullmatch(r"\s*(-?\d+)\s*/\s*(\d+)\s*", s)
+    if slash:
+        a, b = int(slash.group(1)), int(slash.group(2))
+        return a / b if b else None
     s = re.sub(r"\\(?:text|mathrm|textbf|mathbf|textrm)\{([^}]*)\}", r" \1 ", s)
     s = s.replace("{", " ").replace("}", " ").strip()
     m = _NUM.findall(s)

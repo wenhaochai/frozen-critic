@@ -16,8 +16,8 @@ export PYTHONUNBUFFERED=1 CUDA_DEVICE_MAX_CONNECTIONS=1 MASTER_ADDR=127.0.0.1 no
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 RAY_USAGE_STATS_ENABLED=0 WANDB_MODE=offline
 echo "[fc-run] $(date -u +%FT%TZ) host=$(hostname) job=$SLURM_JOB_ID run=$RUN_NAME miles=$(git -C $MILES rev-parse --short HEAD) dirty=$(git -C $MILES status --porcelain | wc -l) repo=$(git -C $ROOT rev-parse --short HEAD) dirty=$(git -C $ROOT status --porcelain --untracked-files=no | wc -l) value=$FC_VALUE_URL"
 nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
-P=$((20000 + (SLURM_JOB_ID % 1270) * 10))
-RAY_TMP=/tmp/ray_$SLURM_JOB_ID
+P=${RAY_PORT_BASE:-$((20000 + (SLURM_JOB_ID % 1270) * 10))}
+RAY_TMP=/tmp/ray_${SLURM_JOB_ID}_$P
 ray start --head --node-ip-address 127.0.0.1 --num-gpus "$GPUS" --port=$P --dashboard-port=$((P + 1)) \
   --dashboard-agent-listen-port=$((P + 2)) --dashboard-agent-grpc-port=$((P + 3)) --metrics-export-port=$((P + 4)) \
   --ray-client-server-port=$((P + 5)) --runtime-env-agent-port=$((P + 6)) --node-manager-port=$((P + 7)) \
