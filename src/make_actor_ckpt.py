@@ -30,8 +30,12 @@ tcfg["tie_word_embeddings"] = False
 # equals 1D RoPE, and it is the form SGLang's ConditionalGeneration class and the labs-molt Qwen3.5 runs use.
 tcfg["rope_parameters"] = json.loads((ROOT / "configs/qwen3.5-0.8b.config.json").read_text())["text_config"]["rope_parameters"]
 cfg = AutoConfig.for_model(**{k: v for k, v in tcfg.items() if k != "model_type"}, model_type="qwen3_5_text")
-model = AutoModelForCausalLM.from_config(cfg, dtype=torch.bfloat16)
+# Initialise in float32, then cast: in bf16, A_log = log(uniform(0, 16)) draws exact zeros and gives -inf (seen in
+# smoke job 15167571: NaN gradients at step 0 from 3 Gated DeltaNet layers).
+model = AutoModelForCausalLM.from_config(cfg, dtype=torch.float32).to(torch.bfloat16)
 sd = {k: v.contiguous() for k, v in model.state_dict().items()}
+bad = [k for k, v in sd.items() if not torch.isfinite(v.float()).all()]
+assert not bad, f"non-finite tensors after init: {bad}"
 n = sum(v.numel() for v in sd.values())
 print(f"{type(model).__name__}: {n/1e9:.3f}B params, {len(sd)} tensors; lm_head tied: {model.config.tie_word_embeddings}")
 assert "lm_head.weight" in sd and sd["lm_head.weight"].data_ptr() != sd["model.embed_tokens.weight"].data_ptr()
