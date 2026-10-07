@@ -10,10 +10,10 @@ LAMBDA=${LAMBDA:?}; SEED=${SEED:-42}; GPUS=4
 MG=$ROOT/models/actor-q35d1b-text; SG=$ROOT/models/actor-q35d1b-lm; D=$ROOT/data
 if [ -n "${SMOKE:-}" ]; then
   R=smoke_lam${LAMBDA}; NR=${NUM_ROLLOUT:-3}; RB=8; NS=4; GBS=16; EVD=$D/gsm8k_test64.parquet; EV=$NR; SAVE=$NR
-  TIME=${TIME:-01:00:00}; extra=(--skip-eval-before-train)
+  TIME=${TIME:-01:00:00}; WU=0; extra=(--skip-eval-before-train)
 else
   R=ppo_lam${LAMBDA}_s$SEED; NR=${NUM_ROLLOUT:-300}; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test.parquet; EV=20; SAVE=20
-  TIME=${TIME:-24:00:00}
+  TIME=${TIME:-24:00:00}; WU=10
   extra=(--use-wandb --wandb-mode offline --wandb-dir $ROOT/runs/$R --wandb-project frozen-critic
          --wandb-group phase1 --wandb-run-id $R --disable-wandb-random-suffix)
 fi
@@ -29,7 +29,7 @@ args=(--hf-checkpoint $SG --megatron-hf-checkpoint $MG --megatron-to-hf-mode bri
   # PPO with the frozen external critic: GAE over its values, no critic model, no KL (the reference would be the random init)
   --advantage-estimator ppo --external-critic-values --gamma 1.0 --lambd $LAMBDA --normalize-advantages
   --eps-clip 0.2 --calculate-per-token-loss --kl-coef 0 --entropy-coef 0
-  --optimizer adam --lr 1e-4 --lr-decay-style constant --lr-warmup-iters 10 --weight-decay 0.01
+  --optimizer adam --lr 1e-4 --lr-decay-style constant --lr-warmup-iters $WU --weight-decay 0.01
   --adam-beta1 0.9 --adam-beta2 0.999 --clip-grad 1.0
   --tensor-model-parallel-size 1 --pipeline-model-parallel-size 1 --context-parallel-size 1
   --use-dynamic-batch-size --max-tokens-per-gpu 16384 --qkv-format thd
