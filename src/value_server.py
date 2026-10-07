@@ -19,10 +19,11 @@ ap.add_argument("--host", default="127.0.0.1")
 ap.add_argument("--port", type=int, required=True)
 ap.add_argument("--window-ms", type=float, default=30.0)
 ap.add_argument("--max-tokens", type=int, default=131072)
+ap.add_argument("--device", default="cuda", help="cpu only for tests (eager backend)")
 args = ap.parse_args()
 
-model = critic.load("cuda", "flash_attention_2")
-assert critic.BACKEND == "flash_attention_2"
+model = critic.load(args.device, "flash_attention_2")
+assert args.device != "cuda" or critic.BACKEND == "flash_attention_2"
 queue: asyncio.Queue = asyncio.Queue()
 stats = {"scored": 0, "tokens": 0, "batches": 0, "busy_s": 0.0}
 
