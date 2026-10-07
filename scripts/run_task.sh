@@ -14,16 +14,17 @@ RAY_BASE=$((20000 + ((SLURM_JOB_ID * 2 + LANE) % 1270) * 10))
 JOBTMP=${TMPDIR:-/tmp}/fc_${SLURM_JOB_ID}_$LANE; mkdir -p "$JOBTMP" "$ROOT/cache/root"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 echo "[task] $(date -u +%FT%TZ) run=$RUN_NAME gpus=$DEVS critic_gpu=$CRIT value_port=$VP ray_base=$RAY_BASE"
-(cd "$ROOT/src" && HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=$CRIT exec "$ROOT/.venv-critic/bin/python" value_server.py --port $VP) \
+(cd "$ROOT/src" && HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=$CRIT exec "$ROOT/.venv-critic/bin/python" value_server.py --port $VP --tag "$SLURM_JOB_ID-$LANE") \
   > "$RUN_DIR/value_server.$SLURM_JOB_ID.log" 2>&1 &
 VPID=$!
 trap 'kill $VPID 2>/dev/null || true; rm -rf "$JOBTMP"' EXIT
+mine() { curl -sf "http://127.0.0.1:$VP/health" | grep -q "\"tag\": \"$SLURM_JOB_ID-$LANE\""; }   # our server, not a stranger on the port
 for i in $(seq 1 120); do
-  curl -sf "http://127.0.0.1:$VP/health" >/dev/null && break
+  mine && break
   kill -0 $VPID 2>/dev/null || { echo "[task] value server died"; tail -20 "$RUN_DIR/value_server.$SLURM_JOB_ID.log"; exit 1; }
   sleep 5
 done
-curl -sf "http://127.0.0.1:$VP/health" >/dev/null || { echo "[task] value server not ready after 10 min"; exit 1; }
+mine || { echo "[task] value server not ready (or port $VP taken) after 10 min"; exit 1; }
 apptainer exec --nv --contain --cleanenv --writable-tmpfs \
   --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
   --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \

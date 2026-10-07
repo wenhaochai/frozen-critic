@@ -42,6 +42,9 @@ CASES = [  # (response, gold, expected)
     ("a" * 200000 + "\\boxed{18}", "18", True),                                     # over-long
     ("\\boxed{18}" + "x" * 200000, "18", True),
     ("\\boxed{" + "9" * 5000 + "}", "18", False),
+    ("\\boxed{.5}", "0.5", True),
+    ("\\boxed{\u221218}", "-18", True),
+    ("\\boxed{18{,}000}", "18000", True),
 ]
 
 

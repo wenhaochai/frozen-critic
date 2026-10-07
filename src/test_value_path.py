@@ -31,5 +31,5 @@ cut = SimpleNamespace(tokens=p_ids + r_ids[:-1], response_length=len(r_ids) - 1,
 out2 = asyncio.run(reward_func(None, cut))
 ref2 = m.score_tokens(p_ids, r_ids[:-1])["raw_value_after_complete_input"]
 print("truncated: score", out2["score"], "train_score", round(out2["train_score"], 4), "V(full)", round(ref2, 4))
-assert abs(out2["train_score"] - (out2["score"] + ref2)) < 5e-3
+assert abs(out2["train_score"] - ref2) < 5e-3, "a cut response trains on V(full) alone"
 print("OK")

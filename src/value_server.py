@@ -21,6 +21,7 @@ ap.add_argument("--port", type=int, required=True)
 ap.add_argument("--window-ms", type=float, default=30.0)
 ap.add_argument("--max-tokens", type=int, default=32768)  # per pack; bounds the cached activations on a shared GPU
 ap.add_argument("--device", default="cuda", help="cpu only for tests (eager backend)")
+ap.add_argument("--tag", default="", help="returned by /health so the launcher knows it reached its own server")
 args = ap.parse_args()
 
 model = critic.load(args.device, "flash_attention_2")
@@ -55,7 +56,8 @@ async def batcher():
         try:
             values = await loop.run_in_executor(None, _score, batch)
             for (_, _, fut), v in zip(batch, values):
-                fut.set_result(v)
+                if not fut.done():  # a cancelled request must not fail the rest of the batch
+                    fut.set_result(v)
         except Exception as e:  # fail every waiter loudly; the reward function raises
             for _, _, fut in batch:
                 if not fut.done():
@@ -80,7 +82,7 @@ async def score(request):
 
 
 async def health(_):
-    return web.json_response({"ok": True, **stats})
+    return web.json_response({"ok": True, "tag": args.tag, **stats})
 
 
 async def main():

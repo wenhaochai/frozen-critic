@@ -45,7 +45,7 @@ def last_boxed(text: str):
     return None
 
 
-_NUM = re.compile(r"-?\d+(?:\.\d+)?")  # a comma left in place splits "3,4" into two numbers -> not an answer
+_NUM = re.compile(r"-?(?:\d+(?:\.\d+)?|\.\d+)")  # a comma left in place splits "3,4" into two numbers -> not an answer
 
 
 def normalize_number(s):
@@ -53,7 +53,7 @@ def normalize_number(s):
     \\text{...} wrappers and a plain \\frac{a}{b}; anything with more than one number is not an answer."""
     if s is None:
         return None
-    s = s.replace("\\!", "").replace("\\,", "").replace("\\$", "").replace("$", "")
+    s = s.replace("\u2212", "-").replace("{,}", "").replace("\\!", "").replace("\\,", "").replace("\\$", "").replace("$", "")
     # a comma is a thousands separator only before exactly three digits (18,000); otherwise it separates a list
     s = re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", s)
     s = s.replace("\\%", "").replace("%", "").replace("\\left", "").replace("\\right", "")

@@ -217,21 +217,23 @@ ArticleCharts.define(function (C, t) {
   });
 });
 
-/* Experiment record: one row per training run, from FC_DATA.record */
+/* Experiment record: one row per main run and the two closing lines, from FC_RECORD (site/build_record.py) */
 (function () {
   function draw() {
-    var D = window.FC_DATA || {}, R = D.record || [], box = document.getElementById('rec'); if (!box) return;
+    var R = window.FC_RECORD, box = document.getElementById('rec'); if (!box || !R) return;
     var zh = document.documentElement.getAttribute('data-lang') === 'zh';
     var T = function (en, z) { return zh ? z : en; };
-    var head = [T('Setup', '做法'), T('Actor', 'actor'), 'GAE λ', T('Tokens', 'Token'), 'H100', T('Hours', '小时'), T('Figures', '图'), T('Code', '代码'), 'W&B'];
-    var h = '<table class="rec"><thead><tr>' + head.map(function (x, i) { return '<th' + ((i >= 2 && i <= 5) ? ' class="num"' : '') + '>' + x + '</th>'; }).join('') + '</tr></thead><tbody>';
-    R.forEach(function (r) {
-      h += '<tr><td>' + (zh ? r.setup_zh : r.setup_en) + '</td><td>' + r.actor + '</td><td class="num">' + r.lam + '</td><td class="num">' + (r.tokens || '—') + '</td><td class="num">' + (r.gpus || '—') +
-        '</td><td class="num">' + (r.hours || '—') + '</td><td>' + (r.figs || []).map(function (f) { return '<a href="#' + f[1] + '">' + f[0] + '</a>'; }).join(', ') +
+    var ST = { planned: T('planned', '计划中'), queued: T('queued', '排队中'), running: T('running', '运行中'), stopped: T('stopped', '已停止') };
+    var head = [T('Setup', '做法'), T('Actor', 'actor'), 'GAE λ', 'H100', T('Hours', '小时'), T('Figures', '图'), T('Code', '代码'), 'W&B'];
+    var h = '<table class="rec"><thead><tr>' + head.map(function (x, i) { return '<th' + ((i >= 2 && i <= 4) ? ' class="num"' : '') + '>' + x + '</th>'; }).join('') + '</tr></thead><tbody>';
+    R.rows.forEach(function (r) {
+      var hours = r.hours != null && r.state === 'done' ? r.hours.toFixed(1) : (ST[r.state] || '—');
+      h += '<tr><td>' + (zh ? r.setup_zh : r.setup_en) + '</td><td>' + r.actor + '</td><td class="num">' + r.lam + '</td><td class="num">' + r.gpus +
+        '</td><td class="num">' + hours + '</td><td>' + (r.figs || []).map(function (f) { return '<a href="#' + f[1] + '">' + f[0] + '</a>'; }).join(', ') +
         '</td><td>' + (r.code ? '<a href="' + r.code + '" target="_blank" rel="noopener">' + T('code', '代码') + '</a>' : '') + '</td><td>' + (r.wandb ? '<a href="' + r.wandb + '" target="_blank" rel="noopener">' + T('run', '运行') + '</a>' : '') + '</td></tr>';
     });
-    var done = R.filter(function (r) { return r.done; }).length, gh = R.reduce(function (a, r) { return a + (r.gpu_hours || 0); }, 0);
-    h += '<tr class="total"><td colspan="9">' + T('Total: ' + R.length + ' runs, ' + done + ' done, ' + gh.toFixed(0) + ' GPU-hours', '合计：' + R.length + ' 个 run，完成 ' + done + ' 个，' + gh.toFixed(0) + ' GPU·时') + '</td></tr></tbody></table>';
+    h += '<tr class="total"><td colspan="8">' + T('Main runs: ' + R.main.h100h.toFixed(1) + ' H100-hours, ' + R.main.jobs + ' jobs', '正式的 job：' + R.main.h100h.toFixed(1) + ' H100·时，' + R.main.jobs + ' 个 job') + '</td></tr>';
+    h += '<tr class="total"><td colspan="8">' + T('Other compute: ' + R.other.h100h.toFixed(1) + ' H100-hours, ' + R.other.jobs + ' jobs', 'Other compute：' + R.other.h100h.toFixed(1) + ' H100·时，' + R.other.jobs + ' 个 job') + '</td></tr></tbody></table>';
     box.innerHTML = h;
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', draw); else draw();

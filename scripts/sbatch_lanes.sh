@@ -27,7 +27,9 @@ lane() {
   fi
 }
 pids=()
-for i in "${!LANE_SPECS[@]}"; do lane "$i" "${LANE_SPECS[$i]}" & pids+=($!); done
+# lane 1 starts 5 min later: each miles instance scans up from port 20000 for free ports, and two scanning at once can
+# pick the same ones before SGLang binds them
+for i in "${!LANE_SPECS[@]}"; do (sleep $((i * 300)); lane "$i" "${LANE_SPECS[$i]}") & pids+=($!); done
 rc=0
 for p in "${pids[@]}"; do wait "$p" || rc=1; done
 echo "[job] $(date -u +%FT%TZ) done rc=$rc"

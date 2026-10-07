@@ -2,8 +2,9 @@
 
 Returns the strict GSM8K reward `score` (1 if the last \\boxed{} holds the gold number), the frozen critic's pre-action
 values V(prompt, response[:t]) for every response token, and `train_score`, the reward PPO trains on (--reward-key):
-score for a finished response; for a response cut at the length limit, score + V(prompt, response), the critic's value
-after the whole truncated sequence. miles bootstraps the value after the last token with 0, which for a cut response
+score for a finished response; for a response cut at the length limit, V(prompt, response), the critic's value after the
+whole truncated sequence (the episode did not end, so its return is the bootstrap, not the grade: adding the grade would
+pay a correct answer more for never stopping). miles bootstraps the value after the last token with 0, which for a cut response
 (about 99% for a random actor) would add an action-independent -V spike at the end whose reach grows with GAE lambda;
 the bootstrap term removes it. Values come from src/value_server.py at $FC_VALUE_URL; the response ids are critic ids.
 """
@@ -31,9 +32,9 @@ async def critic_values(prompt_ids, response_ids):
         return [], None
     s = await _session()
     async with s.post(f"{_URL}/score", json={"prompt_ids": prompt_ids, "response_ids": response_ids}) as resp:
-        body = await resp.json()
         if resp.status != 200:
-            raise RuntimeError(f"value server: {body}")
+            raise RuntimeError(f"value server {resp.status}: {(await resp.text())[:500]}")
+        body = await resp.json()
     return body["values"], body["final"]
 
 
@@ -47,6 +48,6 @@ async def reward_func(args, sample, **kwargs):
     score = 1.0 if grade(sample.response, sample.label) else 0.0
     status = getattr(sample.status, "value", sample.status)
     truncated = status == "truncated"
-    train_score = score + (final if truncated and final is not None else 0.0)
+    train_score = final if truncated and final is not None else score
     return {"score": score, "train_score": train_score, "values": values, "critic_final": final,
             "truncated": truncated}
