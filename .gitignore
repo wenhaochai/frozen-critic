@@ -7,3 +7,8 @@ __pycache__/
 slurm-*.out
 site/_artifact/
 .venv-shot/
+images/
+data/
+cache/
+runs/
+pyfix/
