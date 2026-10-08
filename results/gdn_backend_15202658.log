@@ -1,0 +1,39 @@
+== dispatch (flash_qla)
+WARNING: Overriding HOME environment variable with APPTAINERENV_HOME is not permitted
+[01:42:40] : Warning: Buffer read before initialization: 1 buffer(s) read before anything writes them
+  [1] `dk_fragment` is read before anything writes it
+  --> /opt/sglang/lib/python3.12/site-packages/flash_qla/ops/gated_delta_rule/chunk/hopper/fused_bwd.py:466:1
+Initialize the buffer before its first read (for example with `T.clear`, `T.fill`, or a `T.copy` into it). If you believe this is a false positive, disable the check by setting `PassConfigKey.TL_DISABLE_BUFFER_INIT_CHECK` in the pass config.
+[01:42:54] : Warning: T.vectorized loop over `j_t_vec` with extent 2 is lowered as a serial loop because TileLang could not find a valid vectorization plan. Scalar accumulator updates inside the loop are a common cause; move reductions to T.unroll or T.serial if this is intended.
+[01:42:54] : Warning: T.vectorized loop over `j_t_vec` with extent 2 is lowered as a serial loop because TileLang could not find a valid vectorization plan. Scalar accumulator updates inside the loop are a common cause; move reductions to T.unroll or T.serial if this is intended.
+[01:42:54] : Warning: T.vectorized loop over `j_t_vec` with extent 2 is lowered as a serial loop because TileLang could not find a valid vectorization plan. Scalar accumulator updates inside the loop are a common cause; move reductions to T.unroll or T.serial if this is intended.
+[01:42:54] : Warning: T.vectorized loop over `j_t_vec` with extent 2 is lowered as a serial loop because TileLang could not find a valid vectorization plan. Scalar accumulator updates inside the loop are a common cause; move reductions to T.unroll or T.serial if this is intended.
+2026-10-08 01:42:09  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_chunk_local_cumsum_kernel` with `out_idx=None`
+2026-10-08 01:42:12  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_chunk_local_cumsum_kernel`
+2026-10-08 01:42:12  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_kkt_solve_kernel` with `out_idx=None`
+2026-10-08 01:42:17  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_kkt_solve_kernel`
+2026-10-08 01:42:18  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_fused_chunk_gdr_fwd_kernel` with `out_idx=None`
+2026-10-08 01:42:29  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_fused_chunk_gdr_fwd_kernel`
+2026-10-08 01:42:30  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_prepare_h_kernel` with `out_idx=None`
+2026-10-08 01:42:38  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_prepare_h_kernel`
+2026-10-08 01:42:39  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_fused_chunk_gdr_bwd_kernel` with `out_idx=None`
+2026-10-08 01:43:06  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_fused_chunk_gdr_bwd_kernel`
+2026-10-08 01:43:08  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:137): TileLang begins to compile kernel `tilelang_chunk_local_cumsum_kernel` with `out_idx=None`
+2026-10-08 01:43:10  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:145): TileLang completes to compile kernel `tilelang_chunk_local_cumsum_kernel`
+0 {'o': (1.0469, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0242, True), 'b': (11.0, True)}
+1 {'o': (1.0469, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0242, True), 'b': (11.0, True)}
+2 {'o': (1.0469, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0242, True), 'b': (11.0, True)}
+== fla triton
+WARNING: Overriding HOME environment variable with APPTAINERENV_HOME is not permitted
+0 {'o': (1.0547, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0565, True), 'b': (11.0, True)}
+1 {'o': (1.0547, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0565, True), 'b': (11.0, True)}
+2 {'o': (1.0547, True), 'q': (1.0156, True), 'k': (11.8125, True), 'v': (1.1016, True), 'g': (6.0565, True), 'b': (11.0, True)}
+WARNING: Overriding HOME environment variable with APPTAINERENV_HOME is not permitted
+call 0 {'o': 0.0074, 'q': 0.0077, 'k': 0.0053, 'v': 0.0035, 'g': 0.0053, 'b': 0.0057}
+call 1 {'o': 0.0074, 'q': 0.0077, 'k': 0.0053, 'v': 0.0035, 'g': 0.0053, 'b': 0.0057}
+call 2 {'o': 0.0074, 'q': 0.0077, 'k': 0.0053, 'v': 0.0035, 'g': 0.0053, 'b': 0.0057}
+dispatch call0 vs call2 q 0.0 | fla call0 vs call2 0.0
+dispatch call0 vs call2 k 0.0 | fla call0 vs call2 0.0
+dispatch call0 vs call2 v 0.0 | fla call0 vs call2 0.0
+dispatch call0 vs call2 g 0.0 | fla call0 vs call2 0.0
+dispatch call0 vs call2 b 0.0 | fla call0 vs call2 0.0

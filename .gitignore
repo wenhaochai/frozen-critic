@@ -12,3 +12,4 @@ data/
 cache/
 runs/
 pyfix/
+results/gdn_backend/

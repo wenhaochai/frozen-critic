@@ -3,9 +3,10 @@
 # GPU list (shared with miles: the 1B actor leaves room), then miles in the image on the task's GPUs.
 #   run_task.sh RUN_NAME GPU_LIST LANE     (train args from runs/RUN_NAME/train_args, one per line)
 # LANE (0, 1) offsets the value-server port and Ray's port block so two tasks can share a node.
-# FLA_DISABLE_BACKEND_DISPATCH=1: Gated DeltaNet runs on fla's own Triton kernels (Triton 3.7.1 in the image), not
-# flash_qla, whose backward TileLang flags for reading an uninitialised fragment and which gave a 1.8e12 grad norm at
-# step 0 in every smoke (tests/gdn_backend_grads.py compares the two).
+# FLA_DISABLE_BACKEND_DISPATCH=1: Gated DeltaNet runs on fla's own Triton kernels (Triton 3.7.1 in the image) instead
+# of flash_qla. Job 15202658 (tests/gdn_backend_grads.py) found the two agree (max relative gradient difference 0.4-0.8%,
+# deterministic across calls), so flash_qla is NOT the cause of the 1.8e12 step-0 grad norm seen in the smokes; the
+# switch stays only so all three lambda arms run the same kernels.
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 RUN_NAME=$1 DEVS=$2 LANE=$3
