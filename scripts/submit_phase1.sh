@@ -12,7 +12,9 @@ read -ra LAMS <<< "${LAMBDAS:?}"; SEED=${SEED:-42}
 MG=$ROOT/models/actor-q35d1b-text; SG=$ROOT/models/actor-q35d1b-lm; D=$ROOT/data
 write_args() {  # write_args RUN LAMBDA smoke|main
   local R=$1 LAM=$2 KIND=$3 NR RB NS GBS EVD EV SAVE WU extra
-  if [ "$KIND" = smoke ]; then NR=3; RB=8; NS=4; GBS=16; EVD=$D/gsm8k_test64.parquet; EV=3; SAVE=3; WU=0
+  # the smoke copy uses the main run's batch (64 x 8, GBS 256) so it meets the same memory peak (job 15168367 OOMed
+  # at main scale after a small-batch smoke passed)
+  if [ "$KIND" = smoke ]; then NR=2; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test64.parquet; EV=2; SAVE=2; WU=0
     extra=(--skip-eval-before-train)
   else NR=${NUM_ROLLOUT:-300}; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test.parquet; EV=20; SAVE=20; WU=10
     extra=(--use-wandb --wandb-mode offline --wandb-dir $ROOT/runs/$R --wandb-project frozen-critic
