@@ -3,6 +3,9 @@
 # GPU list (shared with miles: the 1B actor leaves room), then miles in the image on the task's GPUs.
 #   run_task.sh RUN_NAME GPU_LIST LANE     (train args from runs/RUN_NAME/train_args, one per line)
 # LANE (0, 1) offsets the value-server port and Ray's port block so two tasks can share a node.
+# FLA_DISABLE_BACKEND_DISPATCH=1: Gated DeltaNet runs on fla's own Triton kernels (Triton 3.7.1 in the image), not
+# flash_qla, whose backward TileLang flags for reading an uninitialised fragment and which gave a 1.8e12 grad norm at
+# step 0 in every smoke (tests/gdn_backend_grads.py compares the two).
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 RUN_NAME=$1 DEVS=$2 LANE=$3
@@ -29,4 +32,5 @@ apptainer exec --nv --contain --cleanenv --writable-tmpfs \
   --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
   --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \
   --env RUN_NAME="$RUN_NAME" --env GPUS="$NG" --env RAY_PORT_BASE="$RAY_BASE" --env FC_VALUE_URL="http://127.0.0.1:$VP" \
+  --env FLA_DISABLE_BACKEND_DISPATCH=1 \
   "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}"

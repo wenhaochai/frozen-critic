@@ -33,7 +33,8 @@ write_args() {  # write_args RUN LAMBDA smoke|main
     --optimizer adam --lr 1e-4 --lr-decay-style constant --lr-warmup-iters $WU --weight-decay 0.01
     --adam-beta1 0.9 --adam-beta2 0.999 --clip-grad 1.0
     --tensor-model-parallel-size 1 --pipeline-model-parallel-size 1 --context-parallel-size 1
-    --use-dynamic-batch-size --max-tokens-per-gpu 16384 --qkv-format thd
+    --use-dynamic-batch-size --max-tokens-per-gpu 8192 --qkv-format thd
+    --recompute-granularity full --recompute-method uniform --recompute-num-layers 1
     --rollout-num-gpus-per-engine 1 --sglang-mem-fraction-static 0.5 --sglang-dtype bfloat16
     --attention-dropout 0.0 --hidden-dropout 0.0
     --actor-num-nodes 1 --actor-num-gpus-per-node 4 --colocate --seed $SEED --rollout-seed $SEED "${extra[@]}")
