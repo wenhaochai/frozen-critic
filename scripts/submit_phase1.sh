@@ -16,7 +16,7 @@ write_args() {  # write_args RUN LAMBDA smoke|main
   # at main scale after a small-batch smoke passed)
   if [ "$KIND" = smoke ]; then NR=2; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test64.parquet; EV=2; SAVE=2; WU=0
     extra=(--skip-eval-before-train)
-  else NR=${NUM_ROLLOUT:-300}; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test.parquet; EV=20; SAVE=20; WU=10
+  else NR=${NUM_ROLLOUT:-300}; RB=64; NS=8; GBS=256; EVD=$D/gsm8k_test.parquet; EV=20; SAVE=10; WU=10
     extra=(--use-wandb --wandb-mode offline --wandb-dir $ROOT/runs/$R --wandb-project frozen-critic
            --wandb-group phase1 --wandb-run-id $R --disable-wandb-random-suffix)
   fi

@@ -7,6 +7,11 @@
 # of flash_qla. Job 15202658 (tests/gdn_backend_grads.py) found the two agree (max relative gradient difference 0.4-0.8%,
 # deterministic across calls), so flash_qla is NOT the cause of the 1.8e12 step-0 grad norm seen in the smokes; the
 # switch stays only so all three lambda arms run the same kernels.
+# Retry: NCCL "Cuda failure 999 'unknown error'" in the first all_reduce after the colocate wake_up hit 3 of 62 miles runs
+# since 2026-09-28 on 3 different nodes (14952940, 14986291, 15168368), so it is treated as transient: a main run that
+# dies with it restarts in place from its latest checkpoint (--load = --save), at most MAX_TRY attempts in all. Any other
+# failure, and any smoke copy, fails at once. NCCL_DEBUG=WARN prints the failing CUDA call; ECC/row-remap state and
+# kernel Xid lines are saved to runs/RUN/gpu_diag.JOBID.TRY.txt after each failure.
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 RUN_NAME=$1 DEVS=$2 LANE=$3
@@ -33,9 +38,33 @@ for i in $(seq 1 120); do
   sleep 5
 done
 mine || { echo "[task] value server not ready (or port $VP taken) after 10 min"; exit 1; }
-apptainer exec --nv --contain --cleanenv --writable-tmpfs \
-  --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
-  --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \
-  --env RUN_NAME="$RUN_NAME" --env GPUS="$NG" --env RAY_PORT_BASE="$RAY_BASE" --env FC_VALUE_URL="http://127.0.0.1:$VP" \
-  --env FLA_DISABLE_BACKEND_DISPATCH=1 \
-  "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}"
+TRANSIENT="Cuda failure 999|ncclUnhandledCudaError"
+[[ $RUN_NAME == smokecopy_* ]] && MAX_TRY=1 || MAX_TRY=${MAX_TRY:-4}
+LOG=$RUN_DIR/console.log
+for TRY in $(seq 1 $MAX_TRY); do
+  START=$(( $( [ -f "$LOG" ] && wc -l < "$LOG" || echo 0) + 1 ))
+  echo "[task] $(date -u +%FT%TZ) attempt $TRY/$MAX_TRY ckpt=$(cat "$RUN_DIR/ckpt/latest_checkpointed_iteration.txt" 2>/dev/null || echo none)"
+  set +e
+  apptainer exec --nv --contain --cleanenv --writable-tmpfs \
+    --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
+    --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \
+    --env RUN_NAME="$RUN_NAME" --env GPUS="$NG" --env RAY_PORT_BASE="$RAY_BASE" --env FC_VALUE_URL="http://127.0.0.1:$VP" \
+    --env FLA_DISABLE_BACKEND_DISPATCH=1 --env NCCL_DEBUG=WARN \
+    "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}"
+  rc=$?
+  [ $rc = 0 ] && exit 0
+  # failure handling runs without -e: a diagnostic that matches nothing must not end the task before the retry
+  { echo "[diag] $(date -u +%FT%TZ) job=$SLURM_JOB_ID host=$(hostname) try=$TRY rc=$rc gpus=$DEVS"
+    nvidia-smi --query-gpu=index,pci.bus_id,memory.used,ecc.errors.uncorrected.volatile.total,retired_pages.pending,remapped_rows.pending,remapped_rows.failure --format=csv 2>&1
+    nvidia-smi -q -d ECC,ROW_REMAPPER 2>&1 | grep -iE "^GPU|uncorr|pending|failure" | head -60
+    dmesg -T 2>&1 | grep -iE "xid|nvrm" | tail -20 || true
+  } > "$RUN_DIR/gpu_diag.$SLURM_JOB_ID.$TRY.txt" 2>&1
+  if ! tail -n +$START "$LOG" | grep -qE "$TRANSIENT"; then echo "[task] attempt $TRY failed rc=$rc (not the transient NCCL error)"; exit $rc; fi
+  [ $TRY -lt $MAX_TRY ] || { echo "[task] transient NCCL error again on the last attempt"; exit $rc; }
+  # the container's exit trap kills its Ray tree; wait until no process of this lane's Ray instance is left
+  for i in $(seq 1 30); do pgrep -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" >/dev/null || break; sleep 10; done
+  pkill -9 -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" 2>/dev/null || true
+  echo "[task] $(date -u +%FT%TZ) attempt $TRY hit the transient NCCL error (rc=$rc); restarting from the latest checkpoint"
+  sleep 30
+  set -e
+done
