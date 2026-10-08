@@ -6,11 +6,13 @@
 #SBATCH --ntasks=1
 #SBATCH --output=/scratch/gpfs/GROUP/USER/project/frozen-critic/logs/slurm/%x-%j.out
 set -euo pipefail
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID APPTAINERENV_TMPDIR=/tmp; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 : "${RUN_NAME:?}" "${GPUS:?}"
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 RUN_DIR=$ROOT/runs/$RUN_NAME; mkdir -p "$RUN_DIR"
-JOBTMP=${TMPDIR:-/tmp}/fc_$SLURM_JOB_ID; mkdir -p "$JOBTMP"
+JOBTMP=$TMPDIR/run; mkdir -p "$JOBTMP"
 IFS=, read -ra DEV <<< "${CUDA_VISIBLE_DEVICES:?}"
 CRIT=${DEV[$((${#DEV[@]} - 1))]}
 VP=$((40000 + SLURM_JOB_ID % 2000))   # above Ray's job-derived block (20000-32700)
@@ -18,7 +20,7 @@ echo "[sbatch] $(date -u +%FT%TZ) node=$(hostname) job=$SLURM_JOB_ID run=$RUN_NA
 (cd "$ROOT/src" && HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=$CRIT exec "$ROOT/.venv-critic/bin/python" value_server.py --port $VP) \
   > "$RUN_DIR/value_server.$SLURM_JOB_ID.log" 2>&1 &
 VPID=$!
-trap 'kill $VPID 2>/dev/null || true; rm -rf "$JOBTMP"' EXIT
+trap 'kill $VPID 2>/dev/null || true; rm -rf "$TMPDIR"' EXIT
 for i in $(seq 1 120); do
   curl -sf "http://127.0.0.1:$VP/health" >/dev/null && break
   kill -0 $VPID 2>/dev/null || { echo "[sbatch] value server died"; tail -20 "$RUN_DIR/value_server.$SLURM_JOB_ID.log"; exit 1; }

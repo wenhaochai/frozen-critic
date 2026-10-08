@@ -8,7 +8,9 @@ MILES=/scratch/gpfs/GROUP/USER/project/miles-frozen-critic
 : "${RUN_NAME:?}" "${SLURM_JOB_ID:?}" "${GPUS:?}" "${FC_VALUE_URL:?}"
 RUN_DIR=$ROOT/runs/$RUN_NAME
 exec > >(tee -a "$RUN_DIR/console.log") 2>&1
-export HOME=/tmp/home TRITON_CACHE_DIR=/tmp/home/.cache/triton; mkdir -p "$HOME"
+# /tmp here is the job's scratch dir bound by run_task.sh (owner rule 2026-10-08: no node /tmp); all caches go there
+export TMPDIR=/tmp HOME=/tmp/home TRITON_CACHE_DIR=/tmp/home/.cache/triton TORCHINDUCTOR_CACHE_DIR=/tmp/home/.cache/inductor
+export TILELANG_CACHE_DIR=/tmp/home/.cache/tilelang XDG_CACHE_HOME=/tmp/home/.cache; mkdir -p "$HOME"
 MEGATRON=/root/Megatron-LM
 # pyfix: opentelemetry-api 1.44.0 (the image's 1.45.0 breaks Ray's dashboard agent), see miles-q38-build/README.md
 export PYTHONPATH=$ROOT/pyfix:$MEGATRON:$MILES:$ROOT/src${PYTHONPATH:+:$PYTHONPATH}

@@ -15,13 +15,17 @@ mapfile -t ARGS < "$RUN_DIR/train_args"
 IFS=, read -ra DEV <<< "$DEVS"; NG=${#DEV[@]}; CRIT=${DEV[$((NG - 1))]}
 VP=$((40000 + (SLURM_JOB_ID % 2000) * 2 + LANE))          # above Ray's job-derived block (20000-32700)
 RAY_BASE=$((20000 + ((SLURM_JOB_ID * 2 + LANE) % 1270) * 10))
-JOBTMP=${TMPDIR:-/tmp}/fc_${SLURM_JOB_ID}_$LANE; mkdir -p "$JOBTMP" "$ROOT/cache/root"
+# compute-node /tmp is small and shared (owner rule 2026-10-08): this task's temp space lives on scratch; the lane dir
+# becomes the container's /tmp (HOME, Triton/Inductor caches, Ray), and TMPDIR points there for every child process
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID/lane$LANE
+JOBTMP=$TMPDIR; mkdir -p "$JOBTMP" "$ROOT/cache/root"
+export APPTAINERENV_TMPDIR=/tmp
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
 echo "[task] $(date -u +%FT%TZ) run=$RUN_NAME gpus=$DEVS critic_gpu=$CRIT value_port=$VP ray_base=$RAY_BASE"
 (cd "$ROOT/src" && HF_HUB_OFFLINE=1 CUDA_VISIBLE_DEVICES=$CRIT exec "$ROOT/.venv-critic/bin/python" value_server.py --port $VP --tag "$SLURM_JOB_ID-$LANE") \
   > "$RUN_DIR/value_server.$SLURM_JOB_ID.log" 2>&1 &
 VPID=$!
-trap 'kill $VPID 2>/dev/null || true; rm -rf "$JOBTMP"' EXIT
+trap 'kill $VPID 2>/dev/null || true; rm -rf "$JOBTMP"; rmdir "$(dirname "$JOBTMP")" 2>/dev/null || true' EXIT
 mine() { curl -sf "http://127.0.0.1:$VP/health" | grep -q "\"tag\": \"$SLURM_JOB_ID-$LANE\""; }   # our server, not a stranger on the port
 for i in $(seq 1 120); do
   mine && break

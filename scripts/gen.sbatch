@@ -11,6 +11,8 @@
 #SBATCH --output=logs/slurm/%x-%j.out
 # Phase 0: GSM8K test samples from normal generators and random-init actors (vLLM, one H100).
 set -euo pipefail
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID APPTAINERENV_TMPDIR=/tmp; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+trap 'rm -rf "$TMPDIR"' EXIT
 cd /scratch/gpfs/GROUP/USER/project/frozen-critic
 export HF_HOME=/scratch/gpfs/GROUP/USER/cache/huggingface HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 export VLLM_USE_FLASHINFER_SAMPLER=0

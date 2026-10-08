@@ -10,8 +10,10 @@
 #SBATCH --output=/scratch/gpfs/GROUP/USER/project/frozen-critic/logs/slurm/%x-%j.out
 # Smoke test: flash_qla vs fla Triton gradients for the GDN kernel (both modes, same inputs).
 set -euo pipefail
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID APPTAINERENV_TMPDIR=/tmp; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+trap 'rm -rf "$TMPDIR"' EXIT
 R=/scratch/gpfs/GROUP/USER/project/frozen-critic; O=$R/results/gdn_backend; mkdir -p $O
-S=$R/images/miles-20260930.sif; X="apptainer exec --nv --contain --cleanenv --bind /scratch/gpfs/GROUP/USER --env HOME=/tmp"
+S=$R/images/miles-20260930.sif; X="apptainer exec --nv --contain --cleanenv --bind /scratch/gpfs/GROUP/USER --bind $TMPDIR:/tmp --env HOME=/tmp"
 echo "== dispatch (flash_qla)"; $X $S python3 $R/tests/gdn_backend_grads.py $O/dispatch.pt
 echo "== fla triton";          $X --env FLA_DISABLE_BACKEND_DISPATCH=1 $S python3 $R/tests/gdn_backend_grads.py $O/fla.pt
 $X $S python3 - <<PY
