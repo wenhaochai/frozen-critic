@@ -75,7 +75,7 @@ def build_artifact():
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--state", default="queued", choices=["queued", "running"])
+    ap.add_argument("--state", default="queued", choices=["planned", "queued", "running"])
     ap.add_argument("--no-artifact", action="store_true")
     args = ap.parse_args()
     data = build_data(args.state)
