@@ -4,7 +4,7 @@ Template rule (website dcfd5a1, owner 2026-10-05/07): one row per main training 
 lines, "Main runs: X H100-hours, N jobs" and "Other compute: X H100-hours, N jobs", counted from sacct over every GPU
 job of the project (GPUs x elapsed), so they sum to the sacct total. A packed job's hours are split by its task ledger
 logs/packed/JOBID.tsv: each main task's GPUs x wall time to its run, everything else (smoke copies, failed tasks,
-startup, gaps, idle lanes) to other compute; the job counts once, as a main job if any task is main.
+startup, gaps, idle lanes, main tasks that exited non-zero) to other compute; the job counts once, as a main job if any task is main.
 Project jobs = Slurm jobs named fc-* since 2026-10-04. sacct must answer, or this fails (no guessing).
 """
 import csv
@@ -51,7 +51,12 @@ def build():
     for j in jobs:
         total = j["gpus"] * j["sec"] / 3600
         tasks = ledger(j["id"])
-        mains = [t for t in (tasks or []) if t["kind"] == "main" and t["run"] in RUNS]
+        # a main task that exited non-zero is a failed task: other compute (template rule); a resumed run's later
+        # successful task carries the run's hours
+        mains = [t for t in (tasks or []) if t["kind"] == "main" and t["run"] in RUNS and t["exit"] == "0"]
+        for t in (tasks or []):
+            if t["kind"] == "main" and t["run"] in RUNS and t["exit"] != "0" and run_state[t["run"]] != "done":
+                run_state[t["run"]] = "stopped"
         for t in (tasks or []):  # the job's lanes name their runs even before a main task has finished
             if t["run"] in RUNS and run_state[t["run"]] == "planned":
                 run_state[t["run"]] = "running"
@@ -60,7 +65,7 @@ def build():
             h = int(t["gpus"]) * (int(t["end"]) - int(t["start"])) / 3600
             run_h[t["run"]] += h
             m += h
-            run_state[t["run"]] = "done" if t["exit"] == "0" else "stopped"
+            run_state[t["run"]] = "done"
         m = min(m, total)
         main_h += m
         other_h += total - m
@@ -69,10 +74,15 @@ def build():
                 main_jobs += 1
             else:
                 other_jobs += 1
-        if j["state"] in ("PENDING", "RUNNING") and j["name"].startswith("fc-ppo"):
+    # live jobs override the ledger (a run resumed after a failed task is running again); the job name lists its
+    # lambdas, fc-ppo-0.95-0.5 -> {"0.95", "0.5"} (exact tokens: "0" must not match "0.95")
+    for j in jobs:
+        if j["state"] in ("PENDING", "RUNNING") and j["name"].startswith("fc-ppo-"):
+            lams = set(j["name"][len("fc-ppo-"):].split("-"))
             for r, l in RUNS.items():
-                if f"-{l}" in j["name"].replace("fc-ppo", "") and run_state[r] == "planned":
-                    run_state[r] = "queued" if j["state"] == "PENDING" else "running"
+                if l in lams and run_state[r] != "done":
+                    if j["state"] == "RUNNING" or run_state[r] != "running":
+                        run_state[r] = "running" if j["state"] == "RUNNING" else "queued"
     total = sum(j["gpus"] * j["sec"] / 3600 for j in jobs)
     assert abs(main_h + other_h - total) < 1e-6, (main_h, other_h, total)
     rows = [{"run": r, "lam": l, "setup_en": f"PPO with the frozen critic, GAE λ = {l}",
