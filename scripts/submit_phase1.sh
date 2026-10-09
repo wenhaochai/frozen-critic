@@ -7,12 +7,14 @@
 #     100-token vocabulary (src/make_char_actor.py, models/actor-q35d05b-char-*), ASCII prompts, writes only 27
 #     arithmetic ids (masked in SGLang and the trainer, miles/utils/fc_vocab_mask.py), format reward FORMAT for a finished
 #     response whose last box holds a number; runs ppo_char_lam*_s42, jobs fc-char-*
+#   VOCAB=char CENTER=1 ...                            -> the same with centred critic values V - V(prompt) (causal test of
+#     the stop penalty, owner 2026-10-09); runs ppo_charc_lam*_s42, jobs fc-charc-*
 # Each lane runs its own 3-rollout smoke copy first and trains only if it passes (owner's packing rules, 2026-10-07).
 # Main runs: --load = --save, so resubmitting the same command resumes after a wall-clock kill.
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 MILES=/scratch/gpfs/GROUP/USER/project/miles-frozen-critic
-read -ra LAMS <<< "${LAMBDAS:?}"; SEED=${SEED:-42}; VOCAB=${VOCAB:-full}
+read -ra LAMS <<< "${LAMBDAS:?}"; SEED=${SEED:-42}; VOCAB=${VOCAB:-full}; CENTER=${CENTER:-0}
 D=$ROOT/data
 case $VOCAB in
   full) PFX=ppo; JPFX=fc-ppo; MG=$ROOT/models/actor-q35d1b-text; SG=$ROOT/models/actor-q35d1b-lm; SFX="";;
@@ -22,6 +24,7 @@ case $VOCAB in
              $D/gsm8k_test64_ascii.parquet; do [ -f $f ] || { echo "missing $f (src/make_char_actor.py, src/make_miles_data.py)" >&2; exit 1; }; done;;
   *) echo "VOCAB must be full or char" >&2; exit 1;;
 esac
+if [ "$CENTER" = 1 ]; then [ $VOCAB = char ] || { echo "CENTER=1 needs VOCAB=char" >&2; exit 1; }; PFX=${PFX}c; JPFX=${JPFX}c; fi
 write_args() {  # write_args RUN LAMBDA smoke|main
   local R=$1 LAM=$2 KIND=$3 NR RB NS GBS EVD EV SAVE WU extra
   # the smoke copy uses the main run's batch (64 x 8, GBS 256) so it meets the same memory peak (job 15168367 OOMed
@@ -57,8 +60,8 @@ write_args() {  # write_args RUN LAMBDA smoke|main
   mkdir -p $ROOT/runs/$R
   printf '%s\n' "${args[@]}" > $ROOT/runs/$R/train_args
   if [ $VOCAB = char ]; then
-    printf 'FC_MODEL_ARGS=qwen3.5-0.5b-char-fc\nFC_ALLOWED_IDS=%s\nFC_CRITIC_ID_MAP=%s\nFC_FORMAT_REWARD=%s\n' \
-      $SG/allowed_ids.json $SG/critic_ids.json $FORMAT > $ROOT/runs/$R/env
+    printf 'FC_MODEL_ARGS=qwen3.5-0.5b-char-fc\nFC_ALLOWED_IDS=%s\nFC_CRITIC_ID_MAP=%s\nFC_FORMAT_REWARD=%s\nFC_CENTER_VALUES=%s\n' \
+      $SG/allowed_ids.json $SG/critic_ids.json $FORMAT $CENTER > $ROOT/runs/$R/env
   else rm -f $ROOT/runs/$R/env; fi
 }
 LANES=""
@@ -70,7 +73,7 @@ done
 N=${#LAMS[@]}; [ $N -le 2 ] || { echo "at most two lanes per job" >&2; exit 1; }
 if [ $N = 2 ]; then QOS=(--partition=pli-c --qos=pli-short); else QOS=(--partition=pli --qos=pli-low); fi
 TIME=${TIME:-24:00:00}; MAIN_TIMEOUT=${MAIN_TIMEOUT:-22h}
-echo "vocab=$VOCAB format=${FORMAT:-none} lanes:$LANES gpus=$((4 * N)) ${QOS[*]} time=$TIME miles=$(git -C $MILES rev-parse --short HEAD) repo=$(git -C $ROOT rev-parse --short HEAD)"
+echo "vocab=$VOCAB center=$CENTER format=${FORMAT:-none} lanes:$LANES gpus=$((4 * N)) ${QOS[*]} time=$TIME miles=$(git -C $MILES rev-parse --short HEAD) repo=$(git -C $ROOT rev-parse --short HEAD)"
 [ -n "${DRY:-}" ] && exit 0
 mkdir -p $ROOT/logs/slurm $ROOT/logs/packed
 jid=$(env LANES="${LANES# }" MAIN_TIMEOUT=$MAIN_TIMEOUT sbatch --parsable "${QOS[@]}" --time=$TIME --gres=gpu:$((4 * N)) \
