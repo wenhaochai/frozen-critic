@@ -16,6 +16,11 @@
 # transport/nvls.cc:257. miles rebuilds its process groups at every colocate wake_up, so each rollout sets up NVLS
 # (NVLink SHARP multicast) buffers again; the failures come after tens of rollouts, at the first collective after a
 # rebuild. NVLS is off so all-reduce uses plain NVLink rings and trees (no measurable cost for a 1B model on 4 GPUs).
+# Stall watchdog: with NVLS off the same spot can hang instead (another project's job 14984569, 2026-10-09: 30 min at
+# 0% GPU after the first post-wake_up collective, no NCCL warning, distributed timeout of 10 min never fired). Health-check
+# lines keep the log growing during such a hang, so the watchdog counts progress lines ("rollout|step|eval N: {"): none for
+# STALL_MIN minutes (default 30; a healthy step takes under a minute) kills the attempt's process group, logs a watchdog
+# line and retries from the checkpoint like the 999 failure.
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 RUN_NAME=$1 DEVS=$2 LANE=$3
@@ -42,20 +47,40 @@ for i in $(seq 1 120); do
   sleep 5
 done
 mine || { echo "[task] value server not ready (or port $VP taken) after 10 min"; exit 1; }
-TRANSIENT="Cuda failure 999|ncclUnhandledCudaError"
+TRANSIENT="Cuda failure 999|ncclUnhandledCudaError|watchdog: no progress"
+STALL_MIN=${STALL_MIN:-30}; WATCH_SEC=${WATCH_SEC:-60}
+PROGRESS="(rollout|step|eval) [0-9]+: \\{"
 [[ $RUN_NAME == smokecopy_* ]] && MAX_TRY=1 || MAX_TRY=${MAX_TRY:-4}
 LOG=$RUN_DIR/console.log
 for TRY in $(seq 1 $MAX_TRY); do
   START=$(( $( [ -f "$LOG" ] && wc -l < "$LOG" || echo 0) + 1 ))
   echo "[task] $(date -u +%FT%TZ) attempt $TRY/$MAX_TRY ckpt=$(cat "$RUN_DIR/ckpt/latest_checkpointed_iteration.txt" 2>/dev/null || echo none)"
   set +e
-  apptainer exec --nv --contain --cleanenv --writable-tmpfs \
+  # own session and process group (setsid), so the watchdog can kill the whole attempt and nothing of the other lane
+  setsid apptainer exec --nv --contain --cleanenv --writable-tmpfs \
     --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
     --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \
     --env RUN_NAME="$RUN_NAME" --env GPUS="$NG" --env RAY_PORT_BASE="$RAY_BASE" --env FC_VALUE_URL="http://127.0.0.1:$VP" \
     --env FLA_DISABLE_BACKEND_DISPATCH=1 --env NCCL_DEBUG=WARN --env NCCL_NVLS_ENABLE=0 \
-    "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}"
-  rc=$?
+    "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}" &
+  APID=$!
+  ( last=-1; since=$(date +%s)
+    while kill -0 $APID 2>/dev/null; do
+      sleep "$WATCH_SEC"
+      n=$(tail -n +$START "$LOG" 2>/dev/null | grep -cE "$PROGRESS")
+      if [ "$n" != "$last" ]; then last=$n; since=$(date +%s); continue; fi
+      if [ $(( $(date +%s) - since )) -ge $((STALL_MIN * 60)) ]; then
+        echo "[task] $(date -u +%FT%TZ) watchdog: no progress line for $STALL_MIN min ($n so far this attempt); killing the attempt" | tee -a "$LOG"
+        kill -TERM -- -$APID 2>/dev/null; sleep 30; kill -KILL -- -$APID 2>/dev/null
+        pkill -9 -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" 2>/dev/null
+        break
+      fi
+    done ) &
+  WPID=$!
+  wait $APID; rc=$?
+  kill $WPID 2>/dev/null; wait $WPID 2>/dev/null
+  # a failed attempt may leave processes of its group behind (TERM ends apptainer first): kill what is left
+  [ $rc = 0 ] || kill -KILL -- -$APID 2>/dev/null
   [ $rc = 0 ] && exit 0
   # failure handling runs without -e: a diagnostic that matches nothing must not end the task before the retry
   { echo "[diag] $(date -u +%FT%TZ) job=$SLURM_JOB_ID host=$(hostname) try=$TRY rc=$rc gpus=$DEVS"
@@ -66,11 +91,11 @@ for TRY in $(seq 1 $MAX_TRY); do
   # count, not grep -q: -q exits at the first match, tail then dies of SIGPIPE and pipefail reads it as "no match"
   # (this hid the retry in job 15202994, lambda 0.5)
   if [ "$(tail -n +$START "$LOG" | grep -cE "$TRANSIENT")" = 0 ]; then echo "[task] attempt $TRY failed rc=$rc (not the transient NCCL error)"; exit $rc; fi
-  [ $TRY -lt $MAX_TRY ] || { echo "[task] transient NCCL error again on the last attempt"; exit $rc; }
+  [ $TRY -lt $MAX_TRY ] || { echo "[task] transient failure again on the last attempt"; exit $rc; }
   # the container's exit trap kills its Ray tree; wait until no process of this lane's Ray instance is left
   for i in $(seq 1 30); do pgrep -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" >/dev/null || break; sleep 10; done
   pkill -9 -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" 2>/dev/null || true
-  echo "[task] $(date -u +%FT%TZ) attempt $TRY hit the transient NCCL error (rc=$rc); restarting from the latest checkpoint"
+  echo "[task] $(date -u +%FT%TZ) attempt $TRY hit a transient failure (NCCL error or watchdog, rc=$rc); restarting from the latest checkpoint"
   sleep 30
   set -e
 done
