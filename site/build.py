@@ -52,7 +52,7 @@ def build_data(state):
     rank, probes, ascent = load("rank"), load("probes"), load("ascent")
     speed, roll, actor = load("speed"), load("bench_rollout"), load("bench_actor")
     d = {"status": {k: state for k in ("auc", "curves", "probes", "ascent", "step")}, "gens": []}
-    d["status"].update({"acc": "planned", "monitor": "planned"})
+    d["status"].update({"acc": state, "monitor": state})
     d["gens"] = [{"key": k, "label": lab} for k, lab in GENS]
     if rank:
         d["rank"] = {}
@@ -105,6 +105,9 @@ def build_data(state):
                           "actor_s": tokens / a["fwd"]["tok_per_s"] + tokens / a["fwd_bwd"]["tok_per_s"],
                           "tokens": tokens})
         d["step"] = steps
+    p1 = load("phase1_curves")  # site/phase1_curves.py: per lambda, train [[rollout, value_last, frac_correct]], eval [[rollout, acc]]
+    if p1:
+        d["phase1"] = {l: {"train": [[r, round(v, 4), round(a, 4)] for r, v, a in c["train"]], "eval": c["eval"]} for l, c in p1.items()}
     for k in ("auc", "curves"):
         if rank:
             d["status"][k] = "done"

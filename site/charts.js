@@ -193,25 +193,43 @@ ArticleCharts.define(function (C, t) {
       T.map(function (r) { return [r.size].concat(STAGES.map(function (s) { return (r[s.k] / 60).toFixed(2); })).concat([((r.rollout_s + r.critic_s + r.actor_s) / 60).toFixed(2)]); }));
   });
 
-  /* Figure 6: GSM8K accuracy over PPO steps per lambda (planned) */
-  var LAMS = [{ k: '0.95', color: BLUE }, { k: '0.5', color: YEL }, { k: '0', color: RED }];
+  /* Figure 6: GSM8K test accuracy (greedy) over PPO steps per lambda, from D.phase1 */
+  var LAMS = [{ k: '0.95', color: BLUE }, { k: '0.5', color: YEL }, { k: '0', color: RED }], P1 = D.phase1 || {};
   C.custom('c-acc', LAMS.map(function (l) { return { label: 'λ = ' + l.k, color: l.color, line: true }; }).concat([{ label: { en: 'Qwen2.5-0.5B-Instruct', zh: 'Qwen2.5-0.5B-Instruct' }, color: REF, line: true }]), function (body, h) {
     var el = h.el, W = 640, H = 300, b = { x: 52, y: 28, w: 570, h: 220 };
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Accuracy over PPO steps', zh: '准确率随 PPO step 变化' }) }, body);
-    var s = frame(el, svg, b, { x0: 0, x1: 400, y0: 0, y1: 0.8, xt: [0, 100, 200, 300, 400], yt: [0, 0.2, 0.4, 0.6, 0.8], yf: function (v) { return v.toFixed(1); },
+    var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 0.8, xt: [0, 100, 200, 300], yt: [0, 0.2, 0.4, 0.6, 0.8], yf: function (v) { return v.toFixed(1); },
       xl: { en: 'PPO step', zh: 'PPO step' }, yl: { en: 'GSM8K test accuracy', zh: 'GSM8K 测试准确率' } });
     if (D.ref_acc != null) { el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, svg); }
-    status(el, svg, b, 'acc');
+    var tp = h.tip(), any = false;
+    LAMS.forEach(function (l, i) {
+      // eval 0 runs before training; eval N (N > 0) runs after rollout N, that is after N + 1 PPO steps
+      var e = ((P1[l.k] || {}).eval || []).map(function (q) { return [q[0] ? q[0] + 1 : 0, q[1]]; }); if (!e.length) return; any = true;
+      path(el, svg, e.map(function (q) { return [s.X(q[0]), s.Y(q[1])]; }), l.color, { w: 2 });
+      e.forEach(function (q) {
+        var c = el('circle', { cx: s.X(q[0]), cy: s.Y(q[1]), r: 3.2, fill: l.color }, svg);
+        hoverDot(h, tp, c, 'λ = ' + l.k + t(', step ', '，step ') + q[0], [{ color: l.color, label: t('Accuracy', '准确率'), v: (q[1] * 100).toFixed(1) + '%' }]);
+      });
+    });
+    if (any) el('text', { x: b.x + b.w / 2, y: b.y + b.h - 22, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--ink-2)',
+      text: t('Every evaluation of every λ: 0 of 1,319 correct', '每个 λ 的每次评测：1,319 道题答对 0 道') }, svg);
+    else status(el, svg, b, 'acc');
   });
 
-  /* Figure 7: critic value vs true accuracy of rollouts per lambda (planned) */
+  /* Figure 7: critic value before the last token vs fraction correct of the training rollouts, per lambda */
   C.custom('c-monitor', [{ label: { en: 'Critic value before the last token', zh: '最后一个 token 之前的 critic 值' }, color: BLUE, line: true }, { label: { en: 'Fraction correct', zh: '答对比例' }, color: GRN, line: true }], function (body, h) {
-    var el = h.el, W = 640, pw = 180, gap = 25, H = 250, top = 30;
+    var el = h.el, W = 640, pw = 180, gap = 25, H = 250, top = 30, tp = h.tip();
     var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Critic value and accuracy per lambda', zh: '各 λ 的 critic 值与准确率' }) }, body);
     LAMS.forEach(function (l, i) {
       var b = { x: 36 + i * (pw + gap), y: top, w: pw, h: 160 };
-      frame(el, svg, b, { x0: 0, x1: 400, y0: 0, y1: 1, xt: [0, 200, 400], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l.k });
-      status(el, svg, b, 'monitor');
+      var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l.k });
+      var tr = (P1[l.k] || {}).train || [];
+      if (!tr.length) { status(el, svg, b, 'monitor'); return; }
+      path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[2])]; }), GRN, { w: 2 });
+      path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[1])]; }), BLUE, { w: 1.6 });
+      var z = tr[tr.length - 1], hit = el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, fill: 'transparent' }, svg);
+      hoverDot(h, tp, hit, 'λ = ' + l.k + t(', step ', '，step ') + (z[0] + 1), [{ color: BLUE, label: t('Critic value', 'critic 值'), v: f3(z[1]) }, { color: GRN, label: t('Fraction correct', '答对比例'), v: f3(z[2]) }]);
+      if (z[0] + 1 < 300) el('text', { x: s.X(z[0] + 1) + 4, y: s.Y(z[1]) - 6, 'font-size': 10.5, fill: 'var(--ink-4)', text: t('step ', 'step ') + (z[0] + 1) }, svg);
     });
     el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
