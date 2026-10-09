@@ -108,6 +108,40 @@ ArticleCharts.define(function (C, t) {
     });
     el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
+
+  /* Figure 3: the same arm with centred critic values V - V(prompt) (D.phase1c), plus mean response length / 1,024 */
+  var P1C = D.phase1c || {};
+  C.custom('c-center', [
+    { label: { en: 'GSM8K test accuracy (greedy)', zh: 'GSM8K 测试准确率（greedy）' }, color: GRN, line: true },
+    { label: { en: 'Training responses ending in a boxed number', zh: '以 boxed 数字结束的训练回答比例' }, color: YEL, line: true },
+    { label: { en: 'Mean response length / 1,024', zh: '平均回答长度 / 1,024' }, color: RED, line: true },
+    { label: { en: 'Critic value before the last token', zh: '最后一个 token 之前的 critic 值' }, color: BLUE, line: true },
+    { label: { en: 'Qwen2.5-0.5B-Instruct accuracy', zh: 'Qwen2.5-0.5B-Instruct 准确率' }, color: REF, line: true }], function (body, h) {
+    var el = h.el, W = 640, pw = 180, gap = 25, H = 250, top = 30, tp = h.tip();
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Centred values: accuracy, boxed answers, length and critic value per lambda', zh: '中心化 value：各 λ 的准确率、boxed 比例、长度和 critic 值' }) }, body);
+    LAMS.forEach(function (l, i) {
+      var b = { x: 36 + i * (pw + gap), y: top, w: pw, h: 160 };
+      var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l });
+      if (D.ref_acc != null) el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.3, 'stroke-dasharray': '4 3' }, svg);
+      var tr = (P1C[l] || {}).train || [], ev = (P1C[l] || {}).eval || [];
+      if (!tr.length && !ev.length) { status(el, svg, b, 'center'); return; }
+      // train rows: [rollout, critic value before the last token, fraction correct, fraction ending in a boxed number, length / 1,024]
+      if (tr.length) {
+        path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[4])]; }), RED, { w: 1.6 });
+        path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[3])]; }), YEL, { w: 1.6 });
+        path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[1])]; }), BLUE, { w: 1.6 });
+      }
+      var e = ev.map(function (q) { return [q[0] ? q[0] + 1 : 0, q[1]]; });
+      if (e.length) path(el, svg, e.map(function (q) { return [s.X(q[0]), s.Y(q[1])]; }), GRN, { w: 2 });
+      var z = tr[tr.length - 1], ze = e[e.length - 1], hit = el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, fill: 'transparent' }, svg);
+      hoverDot(h, tp, hit, 'λ = ' + l, [
+        { color: GRN, label: t('Test accuracy', '测试准确率'), v: ze ? f3(ze[1]) + t(' at step ', '，step ') + ze[0] : '—' },
+        { color: YEL, label: t('Boxed-number fraction', 'boxed 数字比例'), v: z ? f3(z[3]) : '—' },
+        { color: RED, label: t('Mean length / 1,024', '平均长度 / 1,024'), v: z ? f3(z[4]) : '—' },
+        { color: BLUE, label: t('Critic value', 'critic 值'), v: z ? f3(z[1]) : '—' }]);
+    });
+    el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
+  });
 });
 
 /* Experiment record: one row per main run and the two closing lines, from FC_RECORD (site/build_record.py) */

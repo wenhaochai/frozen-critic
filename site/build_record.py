@@ -18,8 +18,9 @@ OUT = Path("/scratch/gpfs/GROUP/USER/project/website/wenhaochai.github.io/assets
 LAMBDAS = ["0.95", "0.5", "0"]
 # run -> lambda. Only the character-level arm has rows (owner, 2026-10-09: the full-vocabulary runs do not make sense,
 # so the page drops them); their jobs, like every other fc-* job, still count in the closing lines as other compute.
-RUNS = {f"ppo_char_lam{l}_s42": l for l in LAMBDAS}
-JOB_PREFIX = "fc-char-"
+# uncentred lambda 0 never ran (cancelled before start); the centred test runs all three
+RUNS = {**{f"ppo_char_lam{l}_s42": l for l in ("0.95", "0.5")}, **{f"ppo_charc_lam{l}_s42": l for l in LAMBDAS}}
+JOB_PREFIX = {"fc-char-": "ppo_char_lam", "fc-charc-": "ppo_charc_lam"}  # job name prefix -> run name prefix
 
 
 def sacct_jobs():
@@ -80,18 +81,23 @@ def build():
     # live jobs override the ledger (a run resumed after a failed task is running again); the job name lists its
     # lambdas, fc-ppo-0.95-0.5 -> {"0.95", "0.5"} (exact tokens: "0" must not match "0.95")
     for j in jobs:
-        if j["state"] in ("PENDING", "RUNNING") and j["name"].startswith(JOB_PREFIX):
-            lams = set(j["name"][len(JOB_PREFIX):].split("-"))
+        pre = next((p for p in JOB_PREFIX if j["name"].startswith(p)), None)
+        if j["state"] in ("PENDING", "RUNNING") and pre:
+            lams = set(j["name"][len(pre):].split("-"))
             for r, l in RUNS.items():
-                if l in lams and run_state[r] != "done":
+                if r == f"{JOB_PREFIX[pre]}{l}_s42" and l in lams and run_state[r] != "done":
                     if j["state"] == "RUNNING" or run_state[r] != "running":
                         run_state[r] = "running" if j["state"] == "RUNNING" else "queued"
     total = sum(j["gpus"] * j["sec"] / 3600 for j in jobs)
     assert abs(main_h + other_h - total) < 1e-6, (main_h, other_h, total)
-    rows = [{"run": r, "lam": l, "setup_en": f"PPO with the frozen critic, 27 output tokens, format reward 0.1, GAE λ = {l}",
-             "setup_zh": f"PPO + 冻结 critic，27 个输出 token，format reward 0.1，GAE λ = {l}",
+    def setup(r, l):
+        c = r.startswith("ppo_charc")
+        return (f"PPO with the frozen critic{', values minus the prompt value' if c else ''}, 27 output tokens, format reward 0.1, GAE λ = {l}",
+                f"PPO + 冻结 critic{'，value 减去题目的 value' if c else ''}，27 个输出 token，format reward 0.1，GAE λ = {l}",
+                [["3", "c-center"]] if c else [["2", "c-arith"]])
+    rows = [{"run": r, "lam": l, "setup_en": setup(r, l)[0], "setup_zh": setup(r, l)[1],
              "actor": "Qwen3.5-arch 0.46B (dense, random init, 100-token vocabulary)", "gpus": 4,
-             "hours": round(run_h[r], 1) if run_h[r] else None, "state": run_state[r], "figs": [["2", "c-arith"]]}
+             "hours": round(run_h[r], 1) if run_h[r] else None, "state": run_state[r], "figs": setup(r, l)[2]}
             for r, l in RUNS.items()]
     rec = {"rows": rows, "main": {"h100h": round(main_h, 1), "jobs": main_jobs},
            "other": {"h100h": round(other_h, 1), "jobs": other_jobs}, "sacct_total_h100h": round(total, 2)}

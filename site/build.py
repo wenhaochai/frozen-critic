@@ -30,9 +30,9 @@ def load(name):
 
 
 def build_data(state):
-    """Figure 1 (critic AUC per generator, results/rank.json) and figure 2 (character-level actor, phase1_char_curves.json)."""
+    """Figure 1 (critic AUC, results/rank.json), figure 2 (character-level actor, phase1_char_curves.json), figure 3 (centred values)."""
     rank = load("rank")
-    d = {"status": {"auc": state, "arith": state}, "gens": [{"key": k, "label": lab} for k, lab in GENS]}
+    d = {"status": {"auc": state, "arith": "done", "center": state}, "gens": [{"key": k, "label": lab} for k, lab in GENS]}
     if rank:
         d["rank"] = {}
         for k, _ in GENS:
@@ -47,6 +47,9 @@ def build_data(state):
     p1 = load("phase1_char_curves")
     if p1:
         d["phase1"] = {l: {"train": [[x[0]] + [round(v, 4) for v in x[1:]] for x in c["train"]], "eval": c["eval"]} for l, c in p1.items()}
+    p1c = load("phase1_charc_curves")  # figure 3: the same arm with centred values V - V(prompt)
+    if p1c:
+        d["phase1c"] = {l: {"train": [[x[0]] + [round(v, 4) for v in x[1:]] for x in c["train"]], "eval": c["eval"]} for l, c in p1c.items()}
     return d
 
 
