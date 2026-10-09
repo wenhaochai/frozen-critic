@@ -48,6 +48,14 @@ def last_boxed(text: str):
 _NUM = re.compile(r"-?(?:\d+(?:\.\d+)?|\.\d+)")  # a comma left in place splits "3,4" into two numbers -> not an answer
 
 
+def _div(a: int, b: int):
+    """a / b, or None for b = 0 or a quotient too large for a float (a 400-digit numerator raises OverflowError)."""
+    try:
+        return a / b if b else None
+    except OverflowError:
+        return None
+
+
 def normalize_number(s):
     """The single number inside a boxed answer, or None. Handles $, %, thousands separators (, and \\,),
     \\text{...} wrappers and a plain \\frac{a}{b}; anything with more than one number is not an answer."""
@@ -60,11 +68,11 @@ def normalize_number(s):
     frac = re.fullmatch(r"\s*(-?)\\[dt]?frac\{(-?\d+)\}\{(-?\d+)\}\s*", s)
     if frac:
         a, b = int(frac.group(2)), int(frac.group(3))
-        return (-1 if frac.group(1) else 1) * a / b if b else None
+        return _div((-1 if frac.group(1) else 1) * a, b)
     slash = re.fullmatch(r"\s*(-?\d+)\s*/\s*(\d+)\s*", s)
     if slash:
         a, b = int(slash.group(1)), int(slash.group(2))
-        return a / b if b else None
+        return _div(a, b)
     s = re.sub(r"\\(?:text|mathrm|textbf|mathbf|textrm)\{([^}]*)\}", r" \1 ", s)
     s = s.replace("{", " ").replace("}", " ").strip()
     m = _NUM.findall(s)
