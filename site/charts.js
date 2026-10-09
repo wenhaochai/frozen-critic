@@ -77,159 +77,34 @@ ArticleCharts.define(function (C, t) {
       GENS.map(function (g) { var r = R[g.key] || {}; return [g.label, f3(r.accuracy)].concat(AUCS.map(function (a) { return f3(r[a.k]); })); }));
   });
 
-  /* Figure 2: value along the response, correct vs incorrect, one panel per generator */
-  C.custom('c-curves', [{ label: { en: 'Correct', zh: '答对' }, color: BLUE, line: true }, { label: { en: 'Incorrect', zh: '答错' }, color: RED, line: true }], function (body, h) {
-    var el = h.el, W = 640, cols = 2, pw = 258, ph = 150, gapX = 60, gapY = 58, top = 30, left = 44;
-    var n = Math.max(GENS.length, 4), rows = Math.ceil(n / cols), H = top + rows * ph + (rows - 1) * gapY + 52;
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Critic value along the response', zh: '回答各位置的 critic 值' }) }, body);
-    var R = D.rank, lo = 0.2, hi = 0.9;
-    if (R) {
-      var all = [];
-      GENS.forEach(function (g) { var r = R[g.key]; if (r) all = all.concat(r.curve_correct || [], r.curve_incorrect || []); });
-      if (all.length) { lo = Math.floor(Math.min.apply(null, all) * 10 - 0.5) / 10; hi = Math.ceil(Math.max.apply(null, all) * 10 + 0.5) / 10; }
-    }
-    var yt = []; for (var v = lo; v <= hi + 1e-9; v += (hi - lo > 0.6 ? 0.2 : 0.1)) yt.push(+v.toFixed(2));
-    var rowsT = [], tp = h.tip();
-    el('text', { x: 0, y: 12, 'font-size': 11.5, fill: 'var(--ink-2)', text: h.pick({ en: 'Mean critic value', zh: '平均 critic 值' }) }, svg);
-    GENS.forEach(function (g, i) {
-      var b = { x: left + (i % cols) * (pw + gapX), y: top + Math.floor(i / cols) * (ph + gapY), w: pw, h: ph };
-      var s = frame(el, svg, b, { x0: 0, x1: 1, y0: lo, y1: hi, xt: [0, 0.5, 1], yt: yt, xf: function (v) { return v === 0 ? t('start', '开头') : v === 1 ? t('end', '结尾') : '0.5'; }, yf: function (v) { return v.toFixed(1); }, name: g.label });
-      var r = R && R[g.key];
-      if (!r) { status(el, svg, b, 'curves'); return; }
-      [['curve_correct', BLUE, { en: 'Correct', zh: '答对' }], ['curve_incorrect', RED, { en: 'Incorrect', zh: '答错' }]].forEach(function (c) {
-        var ys = r[c[0]]; if (!ys) return;
-        var pts = ys.map(function (y, k) { return [s.X((k + 0.5) / ys.length), s.Y(y)]; });
-        path(el, svg, pts, c[1]);
-        rowsT.push([g.label + ' · ' + h.pick(c[2])].concat(ys.filter(function (_, k) { return k % 5 === 0 || k === ys.length - 1; }).map(f3)));
-      });
-    });
-    el('text', { x: W / 2, y: H - 6, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: h.pick({ en: 'Position in the response', zh: '在回答中的位置' }) }, svg);
-    if (R) h.table([{ en: 'Series', zh: '曲线' }, '0–5%', '25–30%', '50–55%', '75–80%', '95–100%'], rowsT);
-  });
-
-  /* Figure 3: value before the last token for real, damaged and random responses */
-  var KIND = { real: [BLUE, { en: 'Real solution', zh: '真实解答' }], damaged: [YEL, { en: 'Damaged solution', zh: '受损的解答' }], random: [RED, { en: 'Random or empty text', zh: '随机或空文本' }] };
-  C.custom('c-probes', Object.keys(KIND).map(function (k) { return { label: KIND[k][1], color: KIND[k][0], dot: true }; }).concat([{ label: { en: 'Prompt alone', zh: '只有题目' }, color: 'var(--ink-2)', line: true }]), function (body, h) {
-    var P = D.probes || [], el = h.el, W = 640, rowH = 26, mL = 236, mR = 18, mT = 24, n = Math.max(P.length, 12), H = mT + n * rowH + 44;
-    var b = { x: mL, y: mT, w: W - mL - mR, h: n * rowH };
-    var x0 = 0, x1 = 1;
-    if (P.length) {
-      var lo = Math.min.apply(null, P.map(function (p) { return p.p10; })), hi = Math.max.apply(null, P.map(function (p) { return p.p90; }).concat([D.prompt_value || 0]));
-      x0 = Math.min(0, Math.floor(lo * 5) / 5); x1 = Math.max(1, Math.ceil(hi * 5) / 5);
-    }
-    var xt = []; for (var v = x0; v <= x1 + 1e-9; v += 0.2) xt.push(+v.toFixed(1));
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Critic value per kind of response', zh: '各类回答的 critic 值' }) }, body);
-    var s = frame(el, svg, b, { x0: x0, x1: x1, y0: 0, y1: 1, xt: xt, xgrid: true, noBase: true, xf: function (v) { return v.toFixed(1); },
-      xl: { en: 'Critic value before the last token (dot: mean; line: 10th to 90th percentile)', zh: '最后一个 token 之前的 critic 值（点：均值；线：第 10 到第 90 百分位）' } });
-    if (!P.length) { status(el, svg, b, 'probes'); return; }
-    if (D.prompt_value != null) el('line', { x1: s.X(D.prompt_value), y1: b.y, x2: s.X(D.prompt_value), y2: b.y + b.h, stroke: 'var(--ink-2)', 'stroke-width': 1.2, 'stroke-dasharray': '3 3' }, svg);
-    var tp = h.tip();
-    P.forEach(function (p, i) {
-      var cy = b.y + i * rowH + rowH / 2, col = KIND[p.kind][0];
-      el('text', { x: b.x - 10, y: cy + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--ink-2)', text: h.pick(p.label) }, svg);
-      el('line', { x1: s.X(p.p10), y1: cy, x2: s.X(p.p90), y2: cy, stroke: col, 'stroke-width': 2, 'stroke-opacity': 0.5 }, svg);
-      var c = el('circle', { cx: s.X(p.mean), cy: cy, r: 5, fill: col, stroke: 'var(--paper)', 'stroke-width': 1.5 }, svg);
-      hoverDot(h, tp, c, h.pick(p.label), [{ color: col, label: { en: 'mean (10th–90th pct)', zh: '均值（第 10–90 百分位）' }, v: f3(p.mean) + ' (' + f2(p.p10) + '–' + f2(p.p90) + ')' }]);
-    });
-    h.table([{ en: 'Response', zh: '回答' }, { en: 'Mean', zh: '均值' }, { en: '10th pct', zh: '第 10 百分位' }, { en: '90th pct', zh: '第 90 百分位' }, 'n'],
-      P.map(function (p) { return [h.pick(p.label), f3(p.mean), f3(p.p10), f3(p.p90), String(p.n)]; }));
-  });
-
-  /* Figure 4: greedy value ascent */
-  var POOLS = [{ k: 'full', label: { en: '512 random candidates per step', zh: '每步 512 个随机候选' }, color: RED },
-               { k: 'small', label: { en: '100-token arithmetic vocabulary', zh: '100 个算术常用 token' }, color: YEL }];
-  C.custom('c-ascent', POOLS.map(function (p) { return { label: p.label, color: p.color, line: true }; }).concat([{ label: { en: 'Correct solutions, middle half', zh: '正确解答，中间一半' }, color: REF }]), function (body, h) {
-    var A = D.ascent, el = h.el, W = 640, H = 330, b = { x: 52, y: 30, w: 570, h: 250 };
-    var y0 = 0.3, y1 = 1.0;
-    if (A) {
-      var all = []; POOLS.forEach(function (p) { (A[p.k] ? A[p.k].runs : []).forEach(function (r) { all = all.concat(r); }); });
-      if (A.band) all = all.concat(A.band);
-      if (A.v0) all.push(A.v0);
-      y0 = Math.floor(Math.min.apply(null, all) * 10 - 0.5) / 10; y1 = Math.ceil(Math.max.apply(null, all) * 10 + 0.5) / 10;
-    }
-    var yt = []; for (var v = y0; v <= y1 + 1e-9; v += 0.1) yt.push(+v.toFixed(1));
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Value over appended tokens', zh: '接上的 token 数与 value' }) }, body);
-    var s = frame(el, svg, b, { x0: 0, x1: 64, y0: y0, y1: y1, xt: [0, 16, 32, 48, 64], yt: yt, yf: function (v) { return v.toFixed(1); },
-      xl: { en: 'Tokens appended to an empty response', zh: '接到空回答后面的 token 数' }, yl: { en: 'Critic value after the token', zh: '接上这个 token 后的 critic 值' } });
-    if (!A) { status(el, svg, b, 'ascent'); return; }
-    if (A.band) el('rect', { x: b.x, y: s.Y(A.band[1]), width: b.w, height: s.Y(A.band[0]) - s.Y(A.band[1]), fill: REF, 'fill-opacity': 0.16 }, svg);
-    var rowsT = [];
-    POOLS.forEach(function (p) {
-      var P = A[p.k]; if (!P) return;
-      P.runs.forEach(function (r) { path(el, svg, r.map(function (v, k) { return [s.X(k + 1), s.Y(v)]; }), p.color, { w: 1, op: 0.35 }); });
-      path(el, svg, P.mean.map(function (v, k) { return [s.X(k + 1), s.Y(v)]; }), p.color, { w: 2.5 });
-      rowsT.push([h.pick(p.label)].concat([1, 8, 16, 32, 64].map(function (k) { return f3(P.mean[k - 1]); })));
-    });
-    h.table([{ en: 'Candidates (mean of problems)', zh: '候选（各题平均）' }, '1', '8', '16', '32', '64'], rowsT);
-  });
-
-  /* Figure 5: time of one PPO step by stage, per actor size */
-  var STAGES = [{ k: 'rollout_s', label: { en: 'Generate responses', zh: '生成回答' }, color: BLUE },
-                { k: 'critic_s', label: { en: 'Critic scoring', zh: 'critic 打分' }, color: YEL },
-                { k: 'actor_s', label: { en: 'Actor update', zh: '更新 actor' }, color: GRN }];
-  C.custom('c-step', STAGES.map(function (s) { return { label: s.label, color: s.color }; }), function (body, h) {
-    var T = D.step, sizes = ['0.5B', '1B', '2B', '4B'], el = h.el, W = 640, rowH = 40, mL = 92, mR = 70, mT = 14, H = mT + sizes.length * rowH + 44;
-    var b = { x: mL, y: mT, w: W - mL - mR, h: sizes.length * rowH };
-    var xmax = 10;
-    if (T) { xmax = Math.max.apply(null, T.map(function (r) { return (r.rollout_s + r.critic_s + r.actor_s) / 60; })); xmax = Math.ceil(xmax / (xmax > 10 ? 5 : 1)) * (xmax > 10 ? 5 : 1); }
-    var step = xmax > 20 ? 5 : xmax > 8 ? 2 : 1, xt = []; for (var v = 0; v <= xmax + 1e-9; v += step) xt.push(v);
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Minutes per PPO step', zh: '每个 PPO step 的分钟数' }) }, body);
-    var s = frame(el, svg, b, { x0: 0, x1: xmax, y0: 0, y1: 1, xt: xt, xgrid: true, noBase: true, xl: { en: 'Minutes per PPO step on one H100', zh: '单张 H100 上每个 PPO step 的分钟数' } });
-    var tp = h.tip();
-    sizes.forEach(function (z, i) {
-      var cy = b.y + i * rowH + rowH / 2;
-      el('text', { x: b.x - 10, y: cy + 4, 'text-anchor': 'end', 'font-size': 11.5, fill: 'var(--ink-2)', text: t('Actor ' + z, 'actor ' + z) }, svg);
-      var r = T && T.filter(function (q) { return q.size === z; })[0]; if (!r) return;
-      var acc = 0;
-      STAGES.forEach(function (st) {
-        var m = r[st.k] / 60, rc = el('rect', { x: s.X(acc), y: cy - 11, width: Math.max(1, s.X(acc + m) - s.X(acc)), height: 22, fill: st.color }, svg);
-        hoverDot(h, tp, rc, t('Actor ', 'actor ') + z, [{ color: st.color, label: st.label, v: m.toFixed(2) + t(' min', ' 分钟') }]);
-        acc += m;
-      });
-      el('text', { x: s.X(acc) + 6, y: cy + 4, 'font-size': 11, fill: 'var(--ink)', text: acc.toFixed(1) + t(' min', ' 分钟') }, svg);
-    });
-    if (!T) status(el, svg, b, 'step');
-    else h.table([{ en: 'Actor', zh: 'actor' }].concat(STAGES.map(function (s) { return s.label; })).concat([{ en: 'Total (min)', zh: '合计（分钟）' }]),
-      T.map(function (r) { return [r.size].concat(STAGES.map(function (s) { return (r[s.k] / 60).toFixed(2); })).concat([((r.rollout_s + r.critic_s + r.actor_s) / 60).toFixed(2)]); }));
-  });
-
-  /* Figure 6: GSM8K test accuracy (greedy) over PPO steps per lambda, from D.phase1 */
-  var LAMS = [{ k: '0.95', color: BLUE }, { k: '0.5', color: YEL }, { k: '0', color: RED }], P1 = D.phase1 || {};
-  C.custom('c-acc', LAMS.map(function (l) { return { label: 'λ = ' + l.k, color: l.color, line: true }; }).concat([{ label: { en: 'Qwen2.5-0.5B-Instruct', zh: 'Qwen2.5-0.5B-Instruct' }, color: REF, line: true }]), function (body, h) {
-    var el = h.el, W = 640, H = 300, b = { x: 52, y: 28, w: 570, h: 220 };
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Accuracy over PPO steps', zh: '准确率随 PPO step 变化' }) }, body);
-    var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 0.8, xt: [0, 100, 200, 300], yt: [0, 0.2, 0.4, 0.6, 0.8], yf: function (v) { return v.toFixed(1); },
-      xl: { en: 'PPO step', zh: 'PPO step' }, yl: { en: 'GSM8K test accuracy', zh: 'GSM8K 测试准确率' } });
-    if (D.ref_acc != null) { el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, svg); }
-    var tp = h.tip(), any = false;
-    LAMS.forEach(function (l, i) {
-      // eval 0 runs before training; eval N (N > 0) runs after rollout N, that is after N + 1 PPO steps
-      var e = ((P1[l.k] || {}).eval || []).map(function (q) { return [q[0] ? q[0] + 1 : 0, q[1]]; }); if (!e.length) return; any = true;
-      path(el, svg, e.map(function (q) { return [s.X(q[0]), s.Y(q[1])]; }), l.color, { w: 2 });
-      e.forEach(function (q) {
-        var c = el('circle', { cx: s.X(q[0]), cy: s.Y(q[1]), r: 3.2, fill: l.color }, svg);
-        hoverDot(h, tp, c, 'λ = ' + l.k + t(', step ', '，step ') + q[0], [{ color: l.color, label: t('Accuracy', '准确率'), v: (q[1] * 100).toFixed(1) + '%' }]);
-      });
-    });
-    if (any) el('text', { x: b.x + b.w / 2, y: b.y + b.h - 22, 'text-anchor': 'middle', 'font-size': 12, fill: 'var(--ink-2)',
-      text: t('Every evaluation of every λ: 0 of 1,319 correct', '每个 λ 的每次评测：1,319 道题答对 0 道') }, svg);
-    else status(el, svg, b, 'acc');
-  });
-
-  /* Figure 7: critic value before the last token vs fraction correct of the training rollouts, per lambda */
-  C.custom('c-monitor', [{ label: { en: 'Critic value before the last token', zh: '最后一个 token 之前的 critic 值' }, color: BLUE, line: true }, { label: { en: 'Fraction correct', zh: '答对比例' }, color: GRN, line: true }], function (body, h) {
+  /* Figure 2: the character-level actor per lambda: test accuracy, boxed-number fraction, critic value (D.phase1) */
+  var LAMS = ['0.95', '0.5', '0'], P1 = D.phase1 || {};
+  C.custom('c-arith', [
+    { label: { en: 'GSM8K test accuracy (greedy)', zh: 'GSM8K 测试准确率（greedy）' }, color: GRN, line: true },
+    { label: { en: 'Training responses ending in a boxed number', zh: '以 boxed 数字结束的训练回答比例' }, color: YEL, line: true },
+    { label: { en: 'Critic value before the last token', zh: '最后一个 token 之前的 critic 值' }, color: BLUE, line: true },
+    { label: { en: 'Qwen2.5-0.5B-Instruct accuracy', zh: 'Qwen2.5-0.5B-Instruct 准确率' }, color: REF, line: true }], function (body, h) {
     var el = h.el, W = 640, pw = 180, gap = 25, H = 250, top = 30, tp = h.tip();
-    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Critic value and accuracy per lambda', zh: '各 λ 的 critic 值与准确率' }) }, body);
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: 'Accuracy, boxed answers and critic value per lambda', zh: '各 λ 的准确率、boxed 答案比例和 critic 值' }) }, body);
     LAMS.forEach(function (l, i) {
       var b = { x: 36 + i * (pw + gap), y: top, w: pw, h: 160 };
-      var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l.k });
-      var tr = (P1[l.k] || {}).train || [];
-      if (!tr.length) { status(el, svg, b, 'monitor'); return; }
-      path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[2])]; }), GRN, { w: 2 });
-      path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[1])]; }), BLUE, { w: 1.6 });
-      var z = tr[tr.length - 1], hit = el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, fill: 'transparent' }, svg);
-      hoverDot(h, tp, hit, 'λ = ' + l.k + t(', step ', '，step ') + (z[0] + 1), [{ color: BLUE, label: t('Critic value', 'critic 值'), v: f3(z[1]) }, { color: GRN, label: t('Fraction correct', '答对比例'), v: f3(z[2]) }]);
-      if (z[0] + 1 < 300) el('text', { x: s.X(z[0] + 1) + 4, y: s.Y(z[1]) - 6, 'font-size': 10.5, fill: 'var(--ink-4)', text: t('step ', 'step ') + (z[0] + 1) }, svg);
+      var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l });
+      if (D.ref_acc != null) el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.3, 'stroke-dasharray': '4 3' }, svg);
+      var tr = (P1[l] || {}).train || [], ev = (P1[l] || {}).eval || [];
+      if (!tr.length && !ev.length) { status(el, svg, b, 'arith'); return; }
+      // train rows: [rollout, critic value before the last token, fraction correct, fraction ending in a boxed number]
+      if (tr.length) {
+        path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[3])]; }), YEL, { w: 1.6 });
+        path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[1])]; }), BLUE, { w: 1.6 });
+      }
+      // eval 0 runs before training; eval N (N > 0) runs after rollout N, that is after N + 1 PPO steps
+      var e = ev.map(function (q) { return [q[0] ? q[0] + 1 : 0, q[1]]; });
+      if (e.length) path(el, svg, e.map(function (q) { return [s.X(q[0]), s.Y(q[1])]; }), GRN, { w: 2 });
+      var z = tr[tr.length - 1], ze = e[e.length - 1], hit = el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, fill: 'transparent' }, svg);
+      hoverDot(h, tp, hit, 'λ = ' + l, [
+        { color: GRN, label: t('Test accuracy', '测试准确率'), v: ze ? f3(ze[1]) + t(' at step ', '，step ') + ze[0] : '—' },
+        { color: YEL, label: t('Boxed-number fraction', 'boxed 数字比例'), v: z ? f3(z[3]) : '—' },
+        { color: BLUE, label: t('Critic value', 'critic 值'), v: z ? f3(z[1]) : '—' }]);
     });
     el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
