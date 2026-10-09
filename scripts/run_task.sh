@@ -12,6 +12,10 @@
 # dies with it restarts in place from its latest checkpoint (--load = --save), at most MAX_TRY attempts in all. Any other
 # failure, and any smoke copy, fails at once. NCCL_DEBUG=WARN prints the failing CUDA call; ECC/row-remap state and
 # kernel Xid lines are saved to runs/RUN/gpu_diag.JOBID.TRY.txt after each failure.
+# NCCL_NVLS_ENABLE=0: with NCCL_DEBUG=WARN the failure in job 15202994 (lambda 0.5, rollout 126) points at
+# transport/nvls.cc:257. miles rebuilds its process groups at every colocate wake_up, so each rollout sets up NVLS
+# (NVLink SHARP multicast) buffers again; the failures come after tens of rollouts, at the first collective after a
+# rebuild. NVLS is off so all-reduce uses plain NVLink rings and trees (no measurable cost for a 1B model on 4 GPUs).
 set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 RUN_NAME=$1 DEVS=$2 LANE=$3
@@ -49,7 +53,7 @@ for TRY in $(seq 1 $MAX_TRY); do
     --bind /scratch/gpfs/GROUP/USER --bind "$JOBTMP":/tmp --bind /dev/shm --bind "$ROOT/cache/root":/root/.cache \
     --env PYTHONNOUSERSITE=1 --env CUDA_VISIBLE_DEVICES="$DEVS" --env SLURM_JOB_ID="$SLURM_JOB_ID" \
     --env RUN_NAME="$RUN_NAME" --env GPUS="$NG" --env RAY_PORT_BASE="$RAY_BASE" --env FC_VALUE_URL="http://127.0.0.1:$VP" \
-    --env FLA_DISABLE_BACKEND_DISPATCH=1 --env NCCL_DEBUG=WARN \
+    --env FLA_DISABLE_BACKEND_DISPATCH=1 --env NCCL_DEBUG=WARN --env NCCL_NVLS_ENABLE=0 \
     "$ROOT/images/miles-20260930.sif" bash "$ROOT/scripts/run_in_container.sh" "${ARGS[@]}"
   rc=$?
   [ $rc = 0 ] && exit 0
@@ -59,7 +63,9 @@ for TRY in $(seq 1 $MAX_TRY); do
     nvidia-smi -q -d ECC,ROW_REMAPPER 2>&1 | grep -iE "^GPU|uncorr|pending|failure" | head -60
     dmesg -T 2>&1 | grep -iE "xid|nvrm" | tail -20 || true
   } > "$RUN_DIR/gpu_diag.$SLURM_JOB_ID.$TRY.txt" 2>&1
-  if ! tail -n +$START "$LOG" | grep -qE "$TRANSIENT"; then echo "[task] attempt $TRY failed rc=$rc (not the transient NCCL error)"; exit $rc; fi
+  # count, not grep -q: -q exits at the first match, tail then dies of SIGPIPE and pipefail reads it as "no match"
+  # (this hid the retry in job 15202994, lambda 0.5)
+  if [ "$(tail -n +$START "$LOG" | grep -cE "$TRANSIENT")" = 0 ]; then echo "[task] attempt $TRY failed rc=$rc (not the transient NCCL error)"; exit $rc; fi
   [ $TRY -lt $MAX_TRY ] || { echo "[task] transient NCCL error again on the last attempt"; exit $rc; }
   # the container's exit trap kills its Ray tree; wait until no process of this lane's Ray instance is left
   for i in $(seq 1 30); do pgrep -u "$(id -u)" -f "ray_${SLURM_JOB_ID}_$RAY_BASE" >/dev/null || break; sleep 10; done
