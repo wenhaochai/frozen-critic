@@ -3,7 +3,7 @@
 ArticleCharts.define(function (C, t) {
   var D = window.FC_DATA || {}, S = D.status || {};
   var BLUE = 'var(--ch-s1)', RED = 'var(--ch-s2)', YEL = 'var(--ch-s3)', GRN = 'var(--ch-s4)', REF = 'var(--ch-ref)';
-  var WORD = { running: ['Running', '运行中'], queued: ['Queued', '排队中'], planned: ['Planned', '计划中'] };
+  var WORD = { running: ['Running', '运行中'], queued: ['Queued', '排队中'], planned: ['Planned', '计划中'], stopped: ['Stopped', '已停止'], done: ['No data', '无数据'] };
   function L(o) { return o == null ? '' : (typeof o === 'string' ? o : t(o.en, o.zh)); }
   function f2(v) { return v == null ? '—' : v.toFixed(2); }
   function f3(v) { return v == null ? '—' : v.toFixed(3); }
@@ -26,8 +26,9 @@ ArticleCharts.define(function (C, t) {
     if (o.name) el('text', { x: b.x + 8, y: b.y + 14, 'font-size': 11.5, 'font-weight': 600, fill: 'var(--ink-2)', text: L(o.name) }, svg);
     return { X: X, Y: Y };
   }
-  function status(el, svg, b, key) {
-    var w = WORD[S[key]] || WORD.queued;
+  function status(el, svg, b, key, lam) {  /* S[key] is a state, or {lambda: state} for the per-lambda panels */
+    var st = S[key]; if (st && typeof st === 'object') st = st[lam];
+    var w = WORD[st] || WORD.queued;
     el('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 6, 'text-anchor': 'middle', 'font-size': 16, 'font-weight': 600, fill: 'var(--ink-4)', text: t(w[0], w[1]) }, svg);
   }
   function path(el, svg, pts, color, o) {
@@ -43,7 +44,7 @@ ArticleCharts.define(function (C, t) {
     node.addEventListener('pointerleave', function () { tp.setAttribute('hidden', ''); });
   }
 
-  /* Figure 1: AUC per generator, three readings of the value */
+  /* Figure 1: AUC per generator, three readings of the value and a length baseline */
   var GENS = D.gens || [];
   var AUCS = [
     { k: 'auc_last', ci: 'auc_last_ci', label: { en: 'Value before the last token', zh: '最后一个 token 之前的值' }, color: BLUE },
@@ -91,7 +92,7 @@ ArticleCharts.define(function (C, t) {
       var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l });
       if (D.ref_acc != null) el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.3, 'stroke-dasharray': '4 3' }, svg);
       var tr = (P1[l] || {}).train || [], ev = (P1[l] || {}).eval || [];
-      if (!tr.length && !ev.length) { status(el, svg, b, 'arith'); return; }
+      if (!tr.length && !ev.length) { status(el, svg, b, 'arith', l); return; }
       // train rows: [rollout, critic value before the last token, fraction correct, fraction ending in a boxed number]
       if (tr.length) {
         path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[3])]; }), YEL, { w: 1.6 });
@@ -124,7 +125,7 @@ ArticleCharts.define(function (C, t) {
       var s = frame(el, svg, b, { x0: 0, x1: 300, y0: 0, y1: 1, xt: [0, 150, 300], yt: [0, 0.5, 1], yf: function (v) { return v.toFixed(1); }, noYLab: i > 0, name: 'λ = ' + l });
       if (D.ref_acc != null) el('line', { x1: b.x, y1: s.Y(D.ref_acc), x2: b.x + b.w, y2: s.Y(D.ref_acc), stroke: REF, 'stroke-width': 1.3, 'stroke-dasharray': '4 3' }, svg);
       var tr = (P1C[l] || {}).train || [], ev = (P1C[l] || {}).eval || [];
-      if (!tr.length && !ev.length) { status(el, svg, b, 'center'); return; }
+      if (!tr.length && !ev.length) { status(el, svg, b, 'center', l); return; }
       // train rows: [rollout, critic value before the last token, fraction correct, fraction ending in a boxed number, length / 1,024]
       if (tr.length) {
         path(el, svg, tr.map(function (q) { return [s.X(q[0] + 1), s.Y(q[4])]; }), RED, { w: 1.6 });
@@ -159,8 +160,8 @@ ArticleCharts.define(function (C, t) {
         '</td><td class="num">' + hours + '</td><td>' + (r.figs || []).map(function (f) { return '<a href="#' + f[1] + '">' + f[0] + '</a>'; }).join(', ') +
         '</td><td>' + (r.code ? '<a href="' + r.code + '" target="_blank" rel="noopener">' + T('code', '代码') + '</a>' : '') + '</td><td>' + (r.wandb ? '<a href="' + r.wandb + '" target="_blank" rel="noopener">' + T('run', '运行') + '</a>' : '') + '</td></tr>';
     });
-    h += '<tr class="total"><td colspan="8">' + T('Main runs: ' + R.main.h100h.toFixed(1) + ' H100-hours, ' + R.main.jobs + ' jobs', '正式的 job：' + R.main.h100h.toFixed(1) + ' H100·时，' + R.main.jobs + ' 个 job') + '</td></tr>';
-    h += '<tr class="total"><td colspan="8">' + T('Other compute: ' + R.other.h100h.toFixed(1) + ' H100-hours, ' + R.other.jobs + ' jobs', 'Other compute：' + R.other.h100h.toFixed(1) + ' H100·时，' + R.other.jobs + ' 个 job') + '</td></tr></tbody></table>';
+    h += '<tr class="total"><td colspan="8">' + T('Main runs: ' + R.main.h100h.toFixed(1) + ' H100-hours, ' + R.main.jobs + (R.main.jobs === 1 ? ' job' : ' jobs'), '正式的 job：' + R.main.h100h.toFixed(1) + ' H100·时，' + R.main.jobs + ' 个 job') + '</td></tr>';
+    h += '<tr class="total"><td colspan="8">' + T('Other compute: ' + R.other.h100h.toFixed(1) + ' H100-hours, ' + R.other.jobs + (R.other.jobs === 1 ? ' job' : ' jobs'), 'Other compute：' + R.other.h100h.toFixed(1) + ' H100·时，' + R.other.jobs + ' 个 job') + '</td></tr></tbody></table>';
     box.innerHTML = h;
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', draw); else draw();

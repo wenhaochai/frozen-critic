@@ -19,7 +19,7 @@ exactly as it did in training.
 Centred values ($FC_CENTER_VALUES=1, owner 2026-10-09, the causal test of the stop penalty): every value and the
 truncation bootstrap become V - V(prompt), where V(prompt) = values[0], the critic's value before the first response
 token. The per-token shaping V(t+1) - V(t) is unchanged; only the stop token changes, from r - V(s_end), about 0 - 0.5,
-to r - (V(s_end) - V(prompt)), about 0. The reward of a finished response is unchanged. reward['v_prompt'] keeps the
+to r - (V(s_end) - V(prompt)), about +0.17 for random text (V(prompt) 0.71 > V(s_end) 0.54; all three centred runs collapsed to an immediate stop). The reward of a finished response is unchanged. reward['v_prompt'] keeps the
 offset, so raw values are values + v_prompt. With $FC_ALLOWED_IDS set, every response id must be an allowed id: a token outside the
 mask would get log-prob -inf on both sides and silently drop out of the loss (audit, 2026-10-09).
 """
