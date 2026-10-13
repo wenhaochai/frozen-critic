@@ -14,22 +14,22 @@ ArticleCharts.define(function (C, t) {
     var Y = function (v) { return b.y + b.h - (v - o.y0) / (o.y1 - o.y0) * b.h; };
     (o.yt || []).forEach(function (v) {
       el('line', { x1: b.x, y1: Y(v), x2: b.x + b.w, y2: Y(v), stroke: 'var(--ch-grid)', 'stroke-width': 1 }, svg);
-      if (!o.noYLab) el('text', { x: b.x - 7, y: Y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--ink-4)', text: (o.yf || String)(v) }, svg);
+      if (!o.noYLab) el('text', { class: 'tk', x: b.x - 7, y: Y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: 'var(--ink-4)', text: (o.yf || String)(v) }, svg);
     });
     (o.xt || []).forEach(function (v) {
       if (o.xgrid) el('line', { x1: X(v), y1: b.y, x2: X(v), y2: b.y + b.h, stroke: 'var(--ch-grid)', 'stroke-width': 1 }, svg);
-      el('text', { x: X(v), y: b.y + b.h + 16, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--ink-4)', text: (o.xf || String)(v) }, svg);
+      el('text', { class: 'tk', x: X(v), y: b.y + b.h + 16, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--ink-4)', text: (o.xf || String)(v) }, svg);
     });
     if (!o.noBase) el('line', { x1: b.x, y1: b.y + b.h, x2: b.x + b.w, y2: b.y + b.h, stroke: 'var(--ch-axis)', 'stroke-width': 1 }, svg);
-    if (o.xl) el('text', { x: b.x + b.w / 2, y: b.y + b.h + 34, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: L(o.xl) }, svg);
-    if (o.yl) el('text', { x: b.x - 7, y: b.y - 12, 'text-anchor': 'start', 'font-size': 11, fill: 'var(--ink-2)', text: L(o.yl) }, svg);
-    if (o.name) el('text', { x: b.x + 8, y: b.y + 14, 'font-size': 11.5, 'font-weight': 600, fill: 'var(--ink-2)', text: L(o.name) }, svg);
+    if (o.xl) el('text', { class: 'ax', x: b.x + b.w / 2, y: b.y + b.h + 34, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: L(o.xl) }, svg);
+    if (o.yl) el('text', { class: 'ax', x: b.x - 7, y: b.y - 12, 'text-anchor': 'start', 'font-size': 11, fill: 'var(--ink-2)', text: L(o.yl) }, svg);
+    if (o.name) el('text', { class: 'pn', x: b.x + 8, y: b.y + 14, 'font-size': 11.5, 'font-weight': 600, fill: 'var(--ink-2)', text: L(o.name) }, svg);
     return { X: X, Y: Y };
   }
   function status(el, svg, b, key, lam) {  /* S[key] is a state, or {lambda: state} for the per-lambda panels */
     var st = S[key]; if (st && typeof st === 'object') st = st[lam];
     var w = WORD[st] || WORD.queued;
-    el('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 6, 'text-anchor': 'middle', 'font-size': 16, 'font-weight': 600, fill: 'var(--ink-4)', text: t(w[0], w[1]) }, svg);
+    el('text', { class: 'big', x: b.x + b.w / 2, y: b.y + b.h / 2 + 6, 'text-anchor': 'middle', 'font-size': 16, 'font-weight': 600, fill: 'var(--ink-4)', text: t(w[0], w[1]) }, svg);
   }
   function path(el, svg, pts, color, o) {
     o = o || {};
@@ -62,7 +62,7 @@ ArticleCharts.define(function (C, t) {
     var R = D.rank, tp = h.tip();
     GENS.forEach(function (g, i) {
       var cy = b.y + i * rowH + rowH / 2;
-      el('text', { x: b.x - 10, y: cy + 4, 'text-anchor': 'end', 'font-size': 11.5, fill: 'var(--ink-2)', text: g.label }, svg);
+      el('text', { class: 'rl', x: b.x - 10, y: cy + 4, 'text-anchor': 'end', 'font-size': 11.5, fill: 'var(--ink-2)', text: g.label }, svg);
       if (!R || !R[g.key]) return;
       AUCS.forEach(function (a, j) {
         var v = R[g.key][a.k]; if (v == null) return;
@@ -107,7 +107,7 @@ ArticleCharts.define(function (C, t) {
         { color: YEL, label: t('Boxed-number fraction', 'boxed 数字比例'), v: z ? f3(z[3]) : '—' },
         { color: BLUE, label: t('Critic value', 'critic 值'), v: z ? f3(z[1]) : '—' }]);
     });
-    el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
+    el('text', { class: 'ax', x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
 
   /* Figure 3: the same arm with centred critic values V - V(prompt) (D.phase1c), plus mean response length / 1,024 */
@@ -141,7 +141,7 @@ ArticleCharts.define(function (C, t) {
         { color: RED, label: t('Mean length / 1,024', '平均长度 / 1,024'), v: z ? f3(z[4]) : '—' },
         { color: BLUE, label: t('Critic value', 'critic 值'), v: z ? f3(z[1]) : '—' }]);
     });
-    el('text', { x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
+    el('text', { class: 'ax', x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
 });
 
