@@ -20,3 +20,6 @@ export HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 nvidia-smi --query-gpu=name --format=csv,noheader
 echo "repo=$(git -C $ROOT rev-parse --short HEAD) dirty=$(git -C $ROOT status --porcelain --untracked-files=no | wc -l)"
 $ROOT/.venv-critic/bin/python diag_answer_pick.py
+rc=$?
+if [ $rc -ne 0 ]; then rm -rf $ROOT/logs/answerpick.lock; fi   # a failed copy frees the lock for the others
+exit $rc
