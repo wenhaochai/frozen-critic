@@ -1,4 +1,4 @@
-# Frozen critic, random actor: final report (closed 2026-10-13)
+# Frozen critic, random actor: the Limite result (2026-10-13)
 
 **Result (negative).** A frozen 1B value model tells a randomly initialised actor only how long to write, never what
 to write: with raw values the actor never stops, with values centred on the prompt it stops at once, and GSM8K test
@@ -6,7 +6,7 @@ accuracy is 0 in all six PPO runs (three GAE λ × two offsets, one seed each). 
 answer but not the answer: among all numbers 0 to 999 its top-valued `\boxed{k}` is right on 4.5% [2.0, 8.0] of
 problems, against 1.5% for always answering 4 on the same problems.
 
-Status: failed (the hypothesis is not supported). The owner closed the project on 2026-10-13. No run is queued.
+Status: negative with Limite. Reopened 2026-10-13 by the owner to test whether a stronger critic changes this; see STATUS.
 
 Page: `blogs/frozen-critic.html` on branch `pretrain-practice` of the website clone (index card marked "Failed");
 private preview https://claude.ai/artifact/556X5h46FnCueDn4xRdQmf. Day-by-day notes: [STATUS.md](STATUS.md).

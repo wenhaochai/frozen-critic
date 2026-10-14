@@ -1,6 +1,6 @@
 # Frozen critic, random actor: status
 
-**Closed 2026-10-13 (failed, negative result). Final report: [FINAL.md](FINAL.md).**
+**Reopened 2026-10-13 (owner): is Limite just too weak? Screening the Open-Reasoner-Zero critics (0.5B, 1.5B, 7B, 32B) offline before any new PPO run. Report of the Limite result: [FINAL.md](FINAL.md).**
 
 **Phase 0 (2026-10-06):** the frozen Limite critic reproduces its card exactly and ranks other models' GSM8K solutions moderately (within-problem AUC 0.66-0.73 on Qwen2.5 generators, above a length baseline on the general ones), but it gives a random actor an almost flat signal (values 0.53-0.65, per-token change sd 0.033) that greedy token search cannot climb above a correct solution: hard to exploit, little to learn from.
 
