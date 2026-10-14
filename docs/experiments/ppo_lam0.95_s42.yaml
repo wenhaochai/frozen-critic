@@ -1,0 +1,28 @@
+purpose: 'Phase 1 arm lambda=0.95: PPO + GAE (gamma 1, lambda 0.95) in miles with the frozen Limite critic giving values only
+  (external values from src/value_server.py), random-init dense qwen3_5 1.05B actor, GSM8K, reward = boxed-answer correctness
+  with V(full) bootstrap on truncation.
+
+  '
+branch@sha: phase1@81de7a2 (miles frozen-critic@d5c855753)
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/sbatch_lanes.sh via scripts/submit_phase1.sh (LAMBDAS=...), task wrapper scripts/run_task.sh
+config: runs/ppo_lam0.95_s42/train_args (300 rollouts x 64 prompts x 8 samples, GBS 256, lr 1e-4, warmup 10, save every 10,
+  eval every 20)
+wandb:
+  project: frozen-critic
+  run_id: ppo_lam0.95_s42
+  url: none (offline)
+  dir: runs/ppo_lam0.95_s42
+jobs:
+- jid: 15202994
+  qos: pli-short
+  lanes: lam0.95 + lam0.5
+  state: failed (sacct; the lambda 0.95 lane itself exited 0)
+  note: started 2026-10-08 20:59; both smoke copies passed; lam0.95 main 20:59-00:13 rc 0, 300/300 rollouts; job state FAILED
+    from the lam0.5 lane
+status: completed
+synced: NEVER
+result: '300/300 rollouts (job 15202994, 12.9 H100-h). Critic value before the last token 0.604 -> 0.654 (mean over tokens
+  0.594 -> 0.690); mean log prob -11.67 -> -2.32. GSM8K test (greedy, 1,319 problems) 0.0 at all 16 evals; 0 of 153,600 training
+  responses correct; every response truncated at 1,024 tokens. Raw rollout 299: 1,830 distinct tokens, most frequent ''----\n\n'',
+  '' au'', '' Classified'', ''Kir'', ''</think>''; no boxed answer. Negative: the actor games the frozen critic.'

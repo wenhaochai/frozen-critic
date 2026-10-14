@@ -1,0 +1,26 @@
+purpose: 'Phase 1 character-level arm, lambda=0.95: PPO + GAE (gamma 1) in miles with the frozen Limite critic giving values
+  only; random-init dense qwen3_5 0.46B actor with its own 100-token vocabulary (1:1 to critic ids), ASCII GSM8K prompts read
+  per character, output masked to 27 arithmetic ids, reward = strict grade + 0.1 format for a finished boxed number, V(full)
+  bootstrap on truncation.'
+branch@sha: phase1@7f11065 (miles frozen-critic@adf376d4d)
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/sbatch_lanes.sh via VOCAB=char FORMAT=0.1 scripts/submit_phase1.sh; env runs/<run>/env
+config: runs/ppo_char_lam0.95_s42/train_args (300 rollouts x 64 prompts x 8 samples, GBS 256, lr 1e-4, warmup 10, save every
+  10, eval every 20 on gsm8k_test_ascii)
+wandb:
+  project: frozen-critic
+  run_id: ppo_char_lam0.95_s42
+  url: https://wandb.ai/reself/frozen-critic/runs/ppo_char_lam0.95_s42
+  dir: runs/ppo_char_lam0.95_s42
+jobs:
+- jid: 15264957
+  qos: pli-short
+  state: completed
+  note: ran 2026-10-09 06:59-10:11 with format reward 0.1; smoke copies passed
+- jid: 15280645
+  qos: pli-short
+  state: cancelled
+  note: resubmit with format 0.5 made after 15264957 had already finished; cancelled before start
+status: completed
+synced: 2026-10-14T01:15Z (3 offline dirs, earliest then --append)
+result: 'Never stops: from rollout 13 at least 99% of training responses run to 1,024 tokens (100% at rollout 299), a fixed digit-heavy string (top tokens 4 17%, ( 11%, boxed 8%); last boxed-number finish at rollout 5; test accuracy 0.0 at all 16 evals (14 distinct greedy outputs over 1,319 problems at the last eval); value before the last token 0.54 -> 0.39. One seed.'

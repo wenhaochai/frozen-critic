@@ -143,6 +143,52 @@ ArticleCharts.define(function (C, t) {
     });
     el('text', { class: 'ax', x: W / 2, y: H - 8, 'text-anchor': 'middle', 'font-size': 11.5, fill: 'var(--ink-2)', text: 'PPO step' }, svg);
   });
+
+  /* Figure 4: how often the critic's top-valued \boxed{k} is the answer (D.answer): among 21 candidates, and among 0..999 */
+  var A = D.answer;
+  C.custom('c-answer', [
+    { label: { en: "Critic's top-valued answer, the problem's own question", zh: 'critic 给分最高的答案，用本题的题目' }, color: BLUE, dot: true },
+    { label: { en: "The same, under another problem's question", zh: '同上，但换成另一道题的题目' }, color: YEL, dot: true },
+    { label: { en: 'Without the critic', zh: '不用 critic' }, color: REF, dot: true }], function (body, h) {
+    var el = h.el, W = 640, mL = 214, mR = 24, rowH = 30, tp = h.tip();
+    var P = [
+      { name: { en: 'A  21 candidates: the answer and 20 other numbers', zh: 'A  21 个候选：正确答案和 20 个其他数字' }, x1: 0.15, xt: [0, 0.05, 0.1, 0.15],
+        rows: A ? [{ label: { en: 'Critic, own question', zh: 'critic，本题题目' }, v: A.pick.top1, c: BLUE },
+                   { label: { en: 'Chance (1 in 21)', zh: '随机猜（21 选 1）' }, v: A.pick.chance, c: REF }] : [] },
+      { name: { en: 'B  All numbers 0 to 999', zh: 'B  0 到 999 的全部数字' }, x1: 0.10, xt: [0, 0.025, 0.05, 0.075, 0.1],
+        rows: A ? [{ label: { en: 'Critic, own question', zh: 'critic，本题题目' }, v: A.open.own, c: BLUE },
+                   { label: { en: 'Always ' + A.open.const + ' (top training answer)', zh: '总是答 ' + A.open.const + '（训练集最常见的答案）' }, v: A.open.const_200, c: REF },
+                   { label: { en: "Critic, another problem's question", zh: 'critic，另一道题的题目' }, v: A.open.other, c: YEL },
+                   { label: { en: 'Chance (1 in 1,000)', zh: '随机猜（1,000 选 1）' }, v: A.open.chance, c: REF }] : [] }];
+    var y = 30, boxes = [];
+    P.forEach(function (p) { var n = Math.max(p.rows.length, 2); boxes.push({ x: mL, y: y + 20, w: W - mL - mR, h: n * rowH }); y += 20 + n * rowH + 52; });
+    var H = y - 12;
+    var svg = el('svg', { viewBox: '0 0 ' + W + ' ' + H, role: 'img', 'aria-label': h.pick({ en: "How often the critic's top-valued answer is right", zh: 'critic 给分最高的答案有多少是对的' }) }, body);
+    P.forEach(function (p, i) {
+      var b = boxes[i], pct = function (v) { return (100 * v).toFixed(1) + '%'; };
+      var s = frame(el, svg, b, { x0: 0, x1: p.x1, y0: 0, y1: 1, xt: p.xt, xgrid: true, noBase: true, xf: function (v) { return (100 * v).toFixed(Math.round(v * 1000) % 10 ? 1 : 0) + '%'; },
+        xl: { en: 'Problems where the answer is right', zh: '答对的题目比例' } });
+      el('text', { class: 'pn', x: 8, y: b.y - 10, 'font-size': 11.5, 'font-weight': 600, fill: 'var(--ink-2)', text: L(p.name) }, svg);
+      if (!A) { status(el, svg, b, 'answer'); return; }
+      p.rows.forEach(function (r, j) {
+        var cy = b.y + j * rowH + rowH / 2, m = Array.isArray(r.v) ? r.v[0] : r.v, ci = Array.isArray(r.v) ? r.v.slice(1) : null;
+        el('text', { class: 'rl', x: b.x - 10, y: cy + 4, 'text-anchor': 'end', 'font-size': 11.5, fill: 'var(--ink-2)', text: L(r.label) }, svg);
+        var bar = el('rect', { x: b.x, y: cy - 8, width: Math.max(1.5, s.X(m) - b.x), height: 16, rx: 2, fill: r.c }, svg);
+        if (ci) {
+          el('line', { x1: s.X(ci[0]), y1: cy, x2: s.X(ci[1]), y2: cy, stroke: 'var(--ink-2)', 'stroke-width': 1.3 }, svg);
+          [ci[0], ci[1]].forEach(function (v) { el('line', { x1: s.X(v), y1: cy - 4, x2: s.X(v), y2: cy + 4, stroke: 'var(--ink-2)', 'stroke-width': 1.3 }, svg); });
+        }
+        el('text', { class: 'vl', x: (ci ? s.X(ci[1]) : s.X(m)) + 6, y: cy + 4, 'font-size': 11, fill: 'var(--ink-2)', text: pct(m) }, svg);
+        var hit = el('rect', { x: b.x, y: cy - rowH / 2, width: b.w, height: rowH, fill: 'transparent' }, svg);
+        hoverDot(h, tp, hit, L(p.name).slice(3), [{ color: r.c, label: L(r.label), v: pct(m) + (ci ? '  [' + pct(ci[0]) + ', ' + pct(ci[1]) + ']' : '') }]);
+      });
+    });
+    if (A) h.table([{ en: 'Candidates', zh: '候选' }, { en: 'Reading', zh: '读法' }, { en: 'Answer right', zh: '答对比例' }, { en: '95% interval', zh: '95% 区间' }],
+      P.reduce(function (acc, p, i) { return acc.concat(p.rows.map(function (r) {
+        var v = Array.isArray(r.v) ? r.v : [r.v];
+        return [i ? '0–999 (n = ' + A.open.n + ')' : t('21 (n = ', '21（n = ') + A.pick.n + t(')', '）'), L(r.label), (100 * v[0]).toFixed(1) + '%', v.length > 1 ? (100 * v[1]).toFixed(1) + '–' + (100 * v[2]).toFixed(1) + '%' : '—'];
+      })); }, []));
+  });
 });
 
 /* Experiment record: one row per main run and the two closing lines, from FC_RECORD (site/build_record.py) */
@@ -161,7 +207,8 @@ ArticleCharts.define(function (C, t) {
         '</td><td>' + (r.code ? '<a href="' + r.code + '" target="_blank" rel="noopener">' + T('code', '代码') + '</a>' : '') + '</td><td>' + (r.wandb ? '<a href="' + r.wandb + '" target="_blank" rel="noopener">' + T('run', '运行') + '</a>' : '') + '</td></tr>';
     });
     h += '<tr class="total"><td colspan="8">' + T('Main runs: ' + R.main.h100h.toFixed(1) + ' H100-hours, ' + R.main.jobs + (R.main.jobs === 1 ? ' job' : ' jobs'), '正式的 job：' + R.main.h100h.toFixed(1) + ' H100·时，' + R.main.jobs + ' 个 job') + '</td></tr>';
-    h += '<tr class="total"><td colspan="8">' + T('Other compute: ' + R.other.h100h.toFixed(1) + ' H100-hours, ' + R.other.jobs + (R.other.jobs === 1 ? ' job' : ' jobs'), 'Other compute：' + R.other.h100h.toFixed(1) + ' H100·时，' + R.other.jobs + ' 个 job') + '</td></tr></tbody></table>';
+    var a1 = R.other.a100h ? R.other.a100h.toFixed(1) : null;  // the two answer_pick jobs ran on A100
+    h += '<tr class="total"><td colspan="8">' + T('Other compute: ' + R.other.h100h.toFixed(1) + ' H100-hours' + (a1 ? ' and ' + a1 + ' A100-hours' : '') + ', ' + R.other.jobs + (R.other.jobs === 1 ? ' job' : ' jobs'), 'Other compute：' + R.other.h100h.toFixed(1) + ' H100·时' + (a1 ? '、' + a1 + ' A100·时' : '') + '，' + R.other.jobs + ' 个 job') + '</td></tr></tbody></table>';
     box.innerHTML = h;
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', draw); else draw();

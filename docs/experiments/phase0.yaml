@@ -1,0 +1,31 @@
+purpose: >
+  Phase 0 of the frozen-critic project: verify paradigma-inc/limite-1b-value-model (repro of the card example,
+  ranking of graded GSM8K samples, values on random-actor and constructed inputs, greedy value ascent,
+  scoring and rollout/actor throughput) before any PPO run.
+branch@sha: main@e4be660
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+envs:
+  critic: .venv-critic (py3.12, torch 2.11.0+cu130, transformers 5.6.2, flash-attn 2.8.3.post1 built sm90 on della-vis2)
+  gen: .venv-gen (py3.12, vllm 0.30.0, torch 2.13.0+cu130)
+jobs:
+  - {jid: 15011065, name: fc-gen, qos: pli-short, state: cancelled, note: duplicate; pli-c cap full}
+  - {jid: 15011098, name: fc-gen, qos: pli-low, state: failed, note: relative venv path after cd src}
+  - {jid: 15011145, name: fc-gen, qos: pli-low, state: completed, note: 4 normal generators ok; random actors failed (vLLM allowed_token_ids max 1024)}
+  - {jid: 15011305, name: fc-gen-rand, qos: pli-low, state: cancelled, note: folded into fc-phase0}
+  - {jid: 15011345, name: fc-phase0, qos: pli-low, state: cancelled, note: resubmitted with the lock}
+  - {jid: 15011543, name: fc-phase0, qos: pli-low, sbatch: scripts/phase0.sbatch, state: cancelled, note: replaced by 15021750}
+  - {jid: 15011541, name: fc-phase0, qos: pli-short, sbatch: scripts/phase0.sbatch, state: cancelled, note: replaced by 15021750}
+  - {jid: 15021750, name: fc-phase0, qos: pli-low, sbatch: scripts/phase0.sbatch, state: completed, note: 33 min 45 s; repro, rank, probes, ascent, speed, rollout bench}
+  - {jid: 15021751, name: fc-phase0, qos: pli-short, state: cancelled, note: duplicate copy}
+  - {jid: 15132135, name: fc-benchactor, qos: pli-low, state: completed, note: 7 min 55 s; actor-update throughput}
+  - {jid: 15132136, name: fc-benchactor, state: cancelled, note: duplicate copy}
+wandb: none (probe, no training)
+status: completed (2026-10-06; summary in docs/STATUS.md, Phase 0)
+synced: NEVER
+result:
+  generation (GSM8K test 500 problems x 4 samples, T=1, strict boxed grader):
+    qwen0.5b-instruct: {acc: 0.376, mixed_problems: 259}
+    qwen1.5b-instruct: {acc: 0.634, mixed_problems: 261}
+    qwen-math1.5b-instruct: {acc: 0.814, mixed_problems: 132}
+    r1distill1.5b: {acc: 0.749, finished: 0.776, mixed_problems: 168}
+  repro_cpu_eager: {prompt_value: 0.695918, mean: 0.680881, card: [0.696658, 0.680541]}

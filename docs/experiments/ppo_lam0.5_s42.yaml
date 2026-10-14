@@ -1,0 +1,41 @@
+purpose: 'Phase 1 arm lambda=0.5: PPO + GAE (gamma 1, lambda 0.5) in miles with the frozen Limite critic giving values only
+  (external values from src/value_server.py), random-init dense qwen3_5 1.05B actor, GSM8K, reward = boxed-answer correctness
+  with V(full) bootstrap on truncation.
+
+  '
+branch@sha: phase1@81de7a2 (miles frozen-critic@d5c855753)
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/sbatch_lanes.sh via scripts/submit_phase1.sh (LAMBDAS=...), task wrapper scripts/run_task.sh
+config: runs/ppo_lam0.5_s42/train_args (300 rollouts x 64 prompts x 8 samples, GBS 256, lr 1e-4, warmup 10, save every 10,
+  eval every 20)
+wandb:
+  project: frozen-critic
+  run_id: ppo_lam0.5_s42
+  url: none (offline)
+  dir: runs/ppo_lam0.5_s42
+jobs:
+- jid: 15202994
+  qos: pli-short
+  lanes: lam0.95 + lam0.5
+  state: failed
+  note: 'lane lam0.5: main died at rollout 126 (ckpt 119), NCCL Cuda failure 999 at transport/nvls.cc:257, GPU 3; retry missed
+    (grep -q + pipefail bug, fixed in 576f480)'
+- jid: 15254534
+  qos: pli-low
+  state: cancelled
+  note: 'duplicate: resumed inside 15202994 instead'
+- jid: '15202994.14'
+  state: killed
+  note: srun --overlap step on GPUs 4-7 of 15202994 (terminal controller's suggestion, 2026-10-08 23:09), resumed from ckpt
+    119, NCCL_NVLS_ENABLE=0; new rollout 120 value 0.6188 matches the first pass; ran rollouts 120-208 with no NCCL error,
+    killed (rc 143) at 00:13 when the job ended after the lam0.95 lane finished; latest ckpt 199
+- jid: 15257382
+  qos: pli-low
+  state: cancelled
+  note: 'submitted 2026-10-09 00:2x, smoke copy then resume from ckpt 199 (NCCL_NVLS_ENABLE=0); cancelled 2026-10-09 by the
+    owner: reward design under review'
+status: cancelled
+synced: NEVER
+result: 'rollouts 0-208 (ckpt 199): critic value before the last token 0.604 -> 0.609, mean log prob -11.68 -> -1.18; eval
+  acc 0.0 at all 11 evals (0-199); 0 correct training responses. Raw rollout 207: ''<think><think></think></think></think>''
+  then repeated '' optim'', '' по'', ''ő'' fragments, 1,020 distinct tokens, ''</think>'' most frequent; no boxed answer.'

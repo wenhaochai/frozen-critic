@@ -56,6 +56,13 @@ def build_data(rec):
     p1c = load("phase1_charc_curves")  # figure 3: the same arm with centred values V - V(prompt)
     if p1c:
         d["phase1c"] = {l: {"train": [[x[0]] + [round(v, 4) for v in x[1:]] for x in c["train"]], "eval": c["eval"]} for l, c in p1c.items()}
+    # figure 4: does the critic pick the answer? (src/diag_answer_pick.py, diag_answer_open.py, diag_answer_open_extra.py)
+    pick, opn, ext = load("answer_pick"), load("answer_open"), load("answer_open_extra")
+    if pick and opn and ext:
+        r4 = lambda v: [round(x, 4) for x in v] if isinstance(v, list) else round(v, 4)
+        d["answer"] = {"pick": {"n": pick["char"]["n_problems"], "top1": r4(pick["char"]["top1"]), "chance": r4(pick["char"]["chance_top1"])},
+                       "open": {"n": opn["n_problems"], "own": r4(opn["true"]["top1"]), "other": r4(opn["swapped"]["top1"]),
+                                "chance": opn["chance_top1"], "const": ext["const"], "const_200": r4(ext["const_200"])}}
     return d
 
 

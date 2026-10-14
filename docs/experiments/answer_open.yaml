@@ -1,0 +1,31 @@
+purpose: 'Open-set follow-up to answer_pick (2026-10-12): for 200 seeded GSM8K test problems with gold in 0..999, the critic scores \boxed{k} + stop for every k in 0..999 (char variant). top-1 of the argmax = ceiling of a template actor that maximises the value; control = the same candidates under another problem''s prompt (seeded derangement), which keeps number preferences and removes the question.'
+branch@sha: phase1@1ec992b
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/answer_open.sbatch (two copies, pli-short and pli-low; logs/answeropen.lock lets one run)
+config: src/diag_answer_open.py defaults (--n 200 --kmax 1000)
+wandb:
+  project: none
+  run_id: none
+  url: none
+  dir: none
+jobs:
+- jid: 15453738
+  qos: pli-short
+  state: completed (5 min 46 s, della-k15g2, H100)
+- jid: 15453739
+  qos: pli-low
+  state: cancelled (redundant, by the terminal session after owner approval, 2026-10-13)
+- jid: 15459287
+  qos: gpu-short (A100, owner chose A100 2026-10-13), scripts/answer_open_a100.sbatch, eager backend
+  state: cancelled (redundant, by the terminal session after owner approval, 2026-10-13)
+status: completed
+synced: NEVER
+result: 'Critic knows the size of the answer, not the answer. 200 problems, candidates \boxed{0..999}, value before the stop token
+  (char variant). Own prompt: argmax is the gold in 4.5% [2.0, 8.0] (chance 0.1%); gold in top 10 26% [20, 33]; median
+  gold rank 36.5 of 1,000; Spearman(argmax, gold) 0.56; argmax within 10% of the gold 9%. Swapped prompt (another
+  problem''s question): top-1 0.5% [0, 1.5], top 10 6.5%, median rank 137.5, Spearman -0.02. All 9 exact hits have gold
+  <= 20 (36% of the 200 golds are); argmax is a number from the question in 1% of problems. Constant baseline: always 4
+  (most common train answer, 210/7,473) is correct on 2.7% [1.8, 3.6] of test and 1.5% of these 200; critic argmax minus
+  always-4 on the same 200 = 3.0 points [0.5, 6.5] (paired bootstrap). (Always 5 is 3.0% of test but picked on test.) So a
+  template-answer PPO arm gains at most about 3 points over a constant answer; not run, owner closed the project
+  2026-10-13. Job ran 5 min 46 s on H100.'

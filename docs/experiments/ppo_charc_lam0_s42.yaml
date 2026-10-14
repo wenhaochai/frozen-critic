@@ -1,0 +1,18 @@
+purpose: 'Causal test of the stop penalty, lambda=0: the character-level arm (0.46B actor, 27 output ids, format reward 0.1)
+  with centred critic values V - V(prompt); only the TD residual at the stop token of a finished response changes (r - V_end becomes r - V_end + V(prompt), about +0.17 for random text, not about 0 as first assumed); under GAE lambda > 0 this adds V(prompt) lambda^(T-1-t) to every token of a finished response; truncated responses are unchanged.'
+branch@sha: phase1@a1059c9 (miles frozen-critic@adf376d4d)
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/sbatch_lanes.sh via VOCAB=char CENTER=1 FORMAT=0.1 scripts/submit_phase1.sh
+config: runs/ppo_charc_lam0_s42/train_args + env
+wandb:
+  project: frozen-critic
+  run_id: ppo_charc_lam0_s42
+  url: https://wandb.ai/reself/frozen-critic/runs/ppo_charc_lam0_s42
+  dir: runs/ppo_charc_lam0_s42
+jobs:
+- jid: 15281143
+  qos: pli-low
+  state: completed
+status: completed
+synced: 2026-10-14T01:15Z (3 offline dirs, earliest then --append)
+result: 'Collapsed to empty answers: from rollout 5 every training response is the single stop token (length 1) to rollout 299; test accuracy 0.0 at all 16 evals, no boxed finish, no correct answer. Cause: the critic values random text below V(prompt) (first character -0.077 on average, value before the stop 0.54 vs V(prompt) 0.71 at rollout 0), so after centring the stop token earns about +0.17 and an immediate stop earns 0 while every written token loses value. Raw traces read 2026-10-11.'

@@ -1,0 +1,34 @@
+purpose: 'Offline diagnostic (owner, 2026-10-11): does the frozen critic rank the gold boxed answer above 20 distractors on
+  GSM8K test (1,317 integer-answer problems, 4 response formats: char, think_char, bpe, think_bpe)? Decides whether a
+  template-answer PPO arm can work at all.'
+branch@sha: phase1@4e1fb84
+worktree: /scratch/gpfs/GROUP/USER/project/frozen-critic
+sbatch: scripts/answer_pick.sbatch (three copies: pli-short, pli-low, and an A100 copy (owner chose A100 2026-10-12, --account=group --qos=gpu-short, routed to gpu-test); logs/answerpick.lock lets one run)
+config: src/diag_answer_pick.py defaults
+wandb:
+  project: none
+  run_id: none
+  url: none
+  dir: none
+jobs:
+- jid: 15389957
+  qos: pli-short
+  state: completed (1 s; started, saw the lock, exited)
+- jid: 15389958
+  qos: pli-low
+  state: cancelled (by the terminal session after owner approval, 2026-10-13)
+- jid: 15447714
+  qos: gpu-test (A100)
+  state: failed (31 s; flash-attn in .venv-critic has H100 kernels only; it left the lock, removed by hand)
+- jid: 15449542
+  qos: gpu-test (A100), scripts/answer_pick_a100.sbatch, critic on the eager backend
+  state: completed (24 min)
+status: completed
+synced: NEVER
+result: 'Weak but real signal. 1,317 problems, gold vs 20 distractors, value before the stop token (char variant; bpe and
+  the think prefix give the same within CIs): top-1 11.3% [9.6, 13.0] vs chance 4.8%; within-problem AUC 0.73 [0.71,
+  0.74]; vs gold +-1/+-2 0.69 [0.67, 0.71]; vs numbers copied from the question 0.90. Gold minus mean distractor is
+  only 0.008 (values about 0.60, within-problem sd 0.010). Part is a round-number preference (36% of golds end in 0,
+  18% of candidates; corr(value, ends in 0) = 0.07): golds not ending in 0 or 5 (674) give top-1 9.5% [7.3, 12.0],
+  AUC 0.67, near AUC 0.59 [0.57, 0.62]; round golds vs round distractors only give top-1 23% vs chance 16%. Follow-up
+  src/diag_answer_open.py: open-set ceiling (argmax over 0..999) and a swapped-prompt control.'
