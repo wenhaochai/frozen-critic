@@ -57,6 +57,10 @@ class Critic:
         shard = json.load(open(idx))["weight_map"]["value_head.weight"] if idx.exists() else "model.safetensors"
         with safe_open(str(path / shard), "pt") as f:
             w = f.get_tensor("value_head.weight")
+        # the 32B head is saved as 8 tensor-parallel shards [8, 640]; row-major flatten gives [1, 5120] (ORZ issue #63:
+        # with this order, correct answers end near 1; no maintainer confirmation, so the rank test is the check)
+        self.head_shape = list(w.shape)
+        w = w.reshape(1, -1)
         self.head = torch.nn.Linear(w.shape[1], 1, bias=False, dtype=dtype, device=device)
         self.head.weight.data.copy_(w)
 
@@ -184,7 +188,7 @@ def main():
     cmap = json.load(open(CHAR_TOK / "critic_ids.json"))  # char-vocab id -> Qwen id
     char_ids = lambda s: [cmap[i] for i in ctok.encode(s, add_special_tokens=False)]
     cr = Critic(path, a.device, dtype)
-    res = {"critic": a.critic}
+    res = {"critic": a.critic, "head_saved_shape": cr.head_shape}
     if "open" in a.tests:
         # the same 200 problems and derangement as diag_answer_open.py
         samples = [s for s in torch.load(EVAL_DUMP, weights_only=False)["samples"]
