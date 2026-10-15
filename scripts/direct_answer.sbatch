@@ -9,9 +9,9 @@
 #SBATCH --mem=64G
 #SBATCH --time=01:00:00
 #SBATCH --output=/scratch/gpfs/GROUP/USER/project/frozen-critic/logs/slurm/%x-%j.out
-# Qwen2.5 instruct models answer the screen's 200 problems with no steps (owner 2026-10-14): src/direct_answer.py.
+# A Qwen3.5 model answers the screen's 200 problems with and without steps (owner 2026-10-14/15; never Qwen2.5): src/direct_answer.py.
 # Usage: sbatch --export=ALL,RUNS="Qwen/Qwen3.5-0.8B:direct Qwen/Qwen3.5-0.8B:steps" scripts/direct_answer.sbatch
-#        smoke only (4 problems): add SMOKE_ONLY=1 and --qos=pli-cp. Default RUNS: Qwen2.5 0.5B-7B instruct, direct.
+#        smoke only (4 problems): add SMOKE_ONLY=1 and --qos=pli-cp. Default RUNS: Qwen3.5-0.8B, direct and steps.
 set -uo pipefail
 export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
@@ -22,7 +22,7 @@ nvidia-smi --query-gpu=name --format=csv,noheader
 echo "repo=$(git -C $ROOT rev-parse --short HEAD) dirty=$(git -C $ROOT status --porcelain --untracked-files=no | wc -l)"
 rc=0
 N=""; [ "${SMOKE_ONLY:-0}" = 1 ] && N="--n 4"
-for r in ${RUNS:-Qwen/Qwen2.5-0.5B-Instruct:direct Qwen/Qwen2.5-1.5B-Instruct:direct Qwen/Qwen2.5-3B-Instruct:direct Qwen/Qwen2.5-7B-Instruct:direct}; do
+for r in ${RUNS:-Qwen/Qwen3.5-0.8B:direct Qwen/Qwen3.5-0.8B:steps}; do
   $ROOT/.venv-critic/bin/python direct_answer.py --model ${r%%:*} --mode ${r##*:} $N || rc=1
 done
 exit $rc
