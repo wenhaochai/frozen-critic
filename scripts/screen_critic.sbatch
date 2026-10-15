@@ -11,7 +11,7 @@
 # Usage: sbatch --export=ALL,CRITIC=orz-critic-7B,CHUNK=250 [--qos=...] scripts/screen_critic.sbatch
 # Two copies per critic wait in two queues (pli-short and pli-low); the first to start takes logs/screen_$CRITIC.lock.
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 L=$ROOT/logs/screen_${CRITIC:?}.lock

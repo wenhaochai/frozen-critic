@@ -14,7 +14,7 @@
 # Usage: sbatch --export=ALL,CRITIC=orz-critic-32B,CHUNK=100 scripts/screen_format.sbatch
 #        smoke only: sbatch --qos=pli-cp --export=ALL,CRITIC=orz-critic-0.5B,SMOKE_ONLY=1 scripts/screen_format.sbatch
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 cd $ROOT/src

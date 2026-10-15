@@ -13,7 +13,7 @@
 # Usage: sbatch --export=ALL,RUNS="Qwen/Qwen3.5-0.8B:direct Qwen/Qwen3.5-0.8B:steps" scripts/direct_answer.sbatch
 #        smoke only (4 problems): add SMOKE_ONLY=1 and --qos=pli-cp. Default RUNS: Qwen3.5-0.8B, direct and steps.
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 cd $ROOT/src

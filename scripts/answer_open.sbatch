@@ -10,7 +10,7 @@
 # Open-set follow-up (2026-10-12): the critic scores boxed 0..999 for 200 GSM8K problems, under the true and a swapped prompt.
 # Two copies wait in two queues (pli-short and pli-low); the first to start takes logs/answeropen.lock, the other exits.
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 if ! mkdir $ROOT/logs/answeropen.lock 2>/dev/null; then echo "another copy holds logs/answeropen.lock; exiting"; exit 0; fi

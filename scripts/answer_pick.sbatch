@@ -10,7 +10,7 @@
 # Offline diagnostic (owner, 2026-10-11): does the frozen critic rank the gold boxed answer above 20 distractors?
 # Two copies wait in two queues (pli-short and pli-long); the first to start takes logs/answerpick.lock, the other exits.
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 if ! mkdir $ROOT/logs/answerpick.lock 2>/dev/null; then echo "another copy holds logs/answerpick.lock; exiting"; exit 0; fi

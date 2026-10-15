@@ -11,7 +11,7 @@ set -euo pipefail
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 PT=/scratch/gpfs/GROUP/USER/tools/packed_task.sh
 export PACKED_LEDGER_DIR=$ROOT/logs/packed
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 : "${LANES:?}" "${MAIN_TIMEOUT:?}"
 IFS=, read -ra ALL <<< "${CUDA_VISIBLE_DEVICES:?}"

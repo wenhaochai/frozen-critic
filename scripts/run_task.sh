@@ -31,7 +31,7 @@ VP=$((40000 + (SLURM_JOB_ID % 2000) * 2 + LANE))          # above Ray's job-deri
 RAY_BASE=$((20000 + ((SLURM_JOB_ID * 2 + LANE) % 1270) * 10))
 # compute-node /tmp is small and shared (owner rule 2026-10-08): this task's temp space lives on scratch; the lane dir
 # becomes the container's /tmp (HOME, Triton/Inductor caches, Ray), and TMPDIR points there for every child process
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID/lane$LANE
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}/lane$LANE
 JOBTMP=$TMPDIR; mkdir -p "$JOBTMP" "$ROOT/cache/root"
 export APPTAINERENV_TMPDIR=/tmp
 unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY

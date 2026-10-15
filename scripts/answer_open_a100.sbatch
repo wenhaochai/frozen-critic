@@ -11,7 +11,7 @@
 # A100 copy (owner chose A100, 2026-10-13): flash-attn in .venv-critic has H100 (sm90) kernels only, so the critic runs
 # on the eager backend (packs of at most 4,096 tokens). Shares logs/answeropen.lock with the two H100 copies.
 set -uo pipefail
-export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/$SLURM_JOB_ID; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
+export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
 ROOT=/scratch/gpfs/GROUP/USER/project/frozen-critic
 if ! mkdir $ROOT/logs/answeropen.lock 2>/dev/null; then echo "another copy holds logs/answeropen.lock; exiting"; exit 0; fi
