@@ -11,6 +11,7 @@ import csv
 import json
 import re
 import subprocess
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,15 +41,30 @@ def sacct_jobs():
     return jobs
 
 
+def wandb_commit(url):
+    """The git commit W&B recorded for a run (anonymous GraphQL: the project is public, as a logged-out reader sees it)."""
+    e, p, r = re.match(r"https://wandb\.ai/([^/]+)/([^/]+)/runs/([^/?#]+)", url).groups()
+    q = {"query": "query($e:String!,$p:String!,$r:String!){project(entityName:$e,name:$p){run(name:$r){commit}}}",
+         "variables": {"e": e, "p": p, "r": r}}
+    req = urllib.request.Request("https://api.wandb.ai/graphql", json.dumps(q).encode(),
+                                 {"Content-Type": "application/json", "User-Agent": "frozen-critic-record"})
+    run = json.load(urllib.request.urlopen(req, timeout=30))["data"]["project"]["run"]
+    if not run or not run["commit"]:
+        raise SystemExit(f"W&B has no commit for {url}: refusing to guess the Code link")
+    return run["commit"]
+
+
 def links(run):
-    """Code and W&B links of a run from its logs/<run>.yaml: branch@sha (this repo's commit) and wandb.url."""
+    """Code and W&B links of a run: wandb.url from logs/<run>.yaml, and the commit W&B recorded for it (template rule;
+    the yaml's branch@sha is the commit at submit, before the job started). The public repo keeps this repo's history
+    unrewritten (its SHAs equal the private ones), so the scrub's commit map is the identity here."""
     p = ROOT / "logs" / f"{run}.yaml"
     if not p.exists():
         return None, None
-    y = p.read_text()
-    m, w = re.search(r"^branch@sha: \w+@([0-9a-f]{7,})", y, re.M), re.search(r"^  url: (https://wandb\.ai/\S+)", y, re.M)
-    sha = subprocess.run(["git", "-C", str(ROOT), "rev-parse", m.group(1)], capture_output=True, text=True, check=True).stdout.strip() if m else None
-    return (f"https://github.com/wenhaochai/frozen-critic/tree/{sha}" if sha else None), (w.group(1) if w else None)
+    w = re.search(r"^  url: (https://wandb\.ai/\S+)", p.read_text(), re.M)
+    if not w:
+        return None, None
+    return f"https://github.com/wenhaochai/frozen-critic/tree/{wandb_commit(w.group(1))}", w.group(1)
 
 
 def ledger(jid):
@@ -102,17 +118,36 @@ def build():
                 if r == f"{JOB_PREFIX[pre]}{l}_s42" and l in lams and run_state[r] != "done":
                     if j["state"] == "RUNNING" or run_state[r] != "running":
                         run_state[r] = "running" if j["state"] == "RUNNING" else "queued"
-    total = sum(j["gpus"] * j["sec"] / 3600 for j in jobs)
+    # a fetched job (tools/fetch_pending.sh) ran inside another job's allocation: its own sacct line is a 0-s cancel, and
+    # its hours are the host's GPUs x its wall time from logs/packed/fetched.tsv (fetched_id host_id start end exit). None
+    # of them is a main run (the PPO runs ended before fetching existed), so they go to other compute. A host that is an
+    # fc-* job already counts that time (its ledger's fetched-ID line is other), so only foreign hosts add hours.
+    fc_ids, fetched_h = {j["id"] for j in jobs}, 0.0
+    p = ROOT / "logs/packed/fetched.tsv"
+    for line in (p.read_text().splitlines() if p.exists() else []):
+        fid, host, start, end, _ = line.split("\t")
+        if fid not in fc_ids or host in fc_ids:
+            continue
+        tres = subprocess.run(["sacct", "-j", host, "-X", "-n", "-P", "-o", "AllocTRES"], capture_output=True, text=True, check=True).stdout
+        m = re.search(r"gres/gpu=(\d+)", tres)
+        if not m:
+            raise SystemExit(f"sacct has no GPU count for host {host} of fetched job {fid}")
+        h = int(m.group(1)) * (int(end) - int(start)) / 3600
+        fetched_h += h
+        other_h += h
+        other_jobs += h > 0
+    total = sum(j["gpus"] * j["sec"] / 3600 for j in jobs) + fetched_h
     assert abs(main_h + other_h + other_a100 - total) < 1e-6, (main_h, other_h, other_a100, total)
     def setup(r, l):
         c = r.startswith("ppo_charc")
         return (f"PPO with the frozen critic{', values minus the prompt value' if c else ''}, 27 output tokens, format reward 0.1, GAE λ = {l}",
                 f"PPO + 冻结 critic{'，value 减去题目的 value' if c else ''}，27 个输出 token，format reward 0.1，GAE λ = {l}",
                 [["3", "c-center"]] if c else [["2", "c-arith"]])
+    lk = {r: links(r) for r in RUNS}  # one W&B query per run
     rows = [{"run": r, "lam": l, "setup_en": setup(r, l)[0], "setup_zh": setup(r, l)[1],
              "actor": "Qwen3.5-arch 0.46B (dense, random init, 100-token vocabulary)", "gpus": 4,
              "hours": round(run_wall[r], 1) if run_wall[r] else None, "state": run_state[r], "figs": setup(r, l)[2],
-             "code": links(r)[0], "wandb": links(r)[1]}
+             "code": lk[r][0], "wandb": lk[r][1]}
             for r, l in RUNS.items()]
     rec = {"rows": rows, "main": {"h100h": round(main_h, 1), "jobs": main_jobs},
            "other": {"h100h": round(other_h, 1), "a100h": round(other_a100, 1), "jobs": other_jobs}, "sacct_total_gpuh": round(total, 2)}
