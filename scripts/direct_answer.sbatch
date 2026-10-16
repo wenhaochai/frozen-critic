@@ -12,6 +12,7 @@
 # A Qwen3.5 model answers the screen's 200 problems with and without steps (owner 2026-10-14/15; never Qwen2.5): src/direct_answer.py.
 # Usage: sbatch --export=ALL,RUNS="Qwen/Qwen3.5-0.8B:direct Qwen/Qwen3.5-0.8B:steps" scripts/direct_answer.sbatch
 #        smoke only (4 problems): add SMOKE_ONLY=1 and --qos=pli-cp. Default RUNS: Qwen3.5-0.8B, direct and steps.
+#FETCHABLE only without --export: the default (no SMOKE_ONLY, default RUNS) is the full 200-problem run; submit it with --comment=fetchable
 set -uo pipefail
 export TMPDIR=/scratch/gpfs/GROUP/USER/tmp/job/${FETCHED_JOB_ID:-$SLURM_JOB_ID}; mkdir -p "$TMPDIR"   # no node /tmp (rule 2026-10-08)
 trap 'rm -rf "$TMPDIR"' EXIT
