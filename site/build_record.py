@@ -54,17 +54,30 @@ def wandb_commit(url):
     return run["commit"]
 
 
+SCRUB_MAP = ROOT / "logs/scrub_commit_map.txt"  # "old new" per line, written by tmp/fc_scan/scrub.sh (git filter-repo)
+
+
+def public_commit(sha):
+    """The public repo is the scrubbed copy (owner 2026-10-16), so a private commit maps through the scrub's commit map.
+    Without the map (no scrub yet) the public SHAs are the private ones."""
+    if not SCRUB_MAP.exists():
+        return sha
+    cmap = dict(l.split() for l in SCRUB_MAP.read_text().splitlines()[1:] if l.strip())  # first line is the header
+    if sha not in cmap:
+        raise SystemExit(f"commit {sha} is not in {SCRUB_MAP}: rerun scrub.sh before building the record")
+    return cmap[sha]
+
+
 def links(run):
     """Code and W&B links of a run: wandb.url from logs/<run>.yaml, and the commit W&B recorded for it (template rule;
-    the yaml's branch@sha is the commit at submit, before the job started). The public repo keeps this repo's history
-    unrewritten (its SHAs equal the private ones), so the scrub's commit map is the identity here."""
+    the yaml's branch@sha is the commit at submit, before the job started), mapped to its public scrubbed commit."""
     p = ROOT / "logs" / f"{run}.yaml"
     if not p.exists():
         return None, None
     w = re.search(r"^  url: (https://wandb\.ai/\S+)", p.read_text(), re.M)
     if not w:
         return None, None
-    return f"https://github.com/wenhaochai/frozen-critic/tree/{wandb_commit(w.group(1))}", w.group(1)
+    return f"https://github.com/wenhaochai/frozen-critic/tree/{public_commit(wandb_commit(w.group(1)))}", w.group(1)
 
 
 def ledger(jid):
